@@ -8,6 +8,7 @@ window.LefamiTimeline = (() => {
   let theaterIndex = 0;
   let lightboxIndex = 0;
   let observer = null;
+  let heroRaf = null;
 
   const els = {};
 
@@ -107,7 +108,7 @@ window.LefamiTimeline = (() => {
 
       for (const photo of byYear.get(year)) {
         const item = document.createElement("article");
-        item.className = "tl-item";
+        item.className = "tl-item is-in";
         item.dataset.id = photo.id;
 
         const node = document.createElement("div");
@@ -118,9 +119,10 @@ window.LefamiTimeline = (() => {
         card.className = "tl-card";
         card.tabIndex = 0;
         card.setAttribute("role", "button");
+        const src = thumb(photo);
         card.innerHTML = `
           <div class="tl-card__media">
-            <img src="${thumb(photo)}" alt="${escapeAttr(photo.note || photo.name)}" loading="lazy" data-id="${photo.id}" />
+            <img src="${src}" alt="${escapeAttr(photo.note || photo.name)}" loading="lazy" decoding="async" width="400" height="300" />
           </div>
           <div class="tl-card__body">
             <p class="tl-card__date">${LefamiExif.formatShort(photo.takenAt || photo.createdTime)}</p>
@@ -129,7 +131,7 @@ window.LefamiTimeline = (() => {
           </div>
         `;
         const img = card.querySelector("img");
-        img.addEventListener("error", () => recoverImage(img, photo));
+        img.addEventListener("error", () => recoverImage(img, photo), { once: true });
         card.addEventListener("click", () => openLightbox(photo.id));
         card.addEventListener("keydown", (e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -146,26 +148,19 @@ window.LefamiTimeline = (() => {
 
     els.root.innerHTML = "";
     els.root.appendChild(frag);
-    observeItems();
   }
 
-  function observeItems() {
-    if (observer) observer.disconnect();
-    observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) entry.target.classList.add("is-in");
-        }
-      },
-      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" }
-    );
-    document.querySelectorAll(".tl-item").forEach((el) => observer.observe(el));
+  function stopHero() {
+    clearInterval(heroTimer);
+    heroTimer = null;
+    if (heroRaf) cancelAnimationFrame(heroRaf);
+    heroRaf = null;
   }
 
   function renderHero() {
     cacheEls();
     const list = sorted();
-    clearInterval(heroTimer);
+    stopHero();
     heroIndex = 0;
 
     if (!list.length) {
@@ -177,31 +172,36 @@ window.LefamiTimeline = (() => {
       return;
     }
 
-    const slides = list.slice(0, 12);
+    // Chỉ 4 slide, ảnh vừa phải — tránh lag
+    const slides = list.slice(0, 4);
     els.heroMedia.innerHTML = slides
       .map(
         (p, i) => `
       <div class="hero__slide ${i === 0 ? "is-active" : ""}">
-        <img src="${view(p)}" alt="" />
+        <img src="${view(p)}" alt="" decoding="async" ${i === 0 ? "" : 'loading="lazy"'} />
       </div>`
       )
       .join("");
 
-    let t = 0;
-    const duration = 5500;
-    const step = 50;
-    heroTimer = setInterval(() => {
-      t += step;
-      const pct = Math.min(100, (t / duration) * 100);
+    const duration = 6000;
+    let start = performance.now();
+
+    function tick(now) {
+      const elapsed = now - start;
+      const pct = Math.min(100, (elapsed / duration) * 100);
       els.heroProgress.style.setProperty("--p", pct + "%");
-      if (t >= duration) {
-        t = 0;
+      if (elapsed >= duration) {
+        start = now;
         const nodes = els.heroMedia.querySelectorAll(".hero__slide");
-        nodes[heroIndex]?.classList.remove("is-active");
-        heroIndex = (heroIndex + 1) % nodes.length;
-        nodes[heroIndex]?.classList.add("is-active");
+        if (nodes.length) {
+          nodes[heroIndex]?.classList.remove("is-active");
+          heroIndex = (heroIndex + 1) % nodes.length;
+          nodes[heroIndex]?.classList.add("is-active");
+        }
       }
-    }, step);
+      heroRaf = requestAnimationFrame(tick);
+    }
+    heroRaf = requestAnimationFrame(tick);
   }
 
   function openLightbox(id) {
@@ -250,7 +250,6 @@ window.LefamiTimeline = (() => {
     if (!list.length) return stopTheater();
     const photo = list[theaterIndex % list.length];
     els.theaterImg.classList.remove("is-on");
-    // Force reflow for fade
     void els.theaterImg.offsetWidth;
     els.theaterImg.src = view(photo);
     els.theaterCaption.textContent = photo.note || photo.name || "";
@@ -305,6 +304,9 @@ window.LefamiTimeline = (() => {
     document.getElementById("lightbox-close")?.addEventListener("click", () => els.lightbox.close());
     document.getElementById("lightbox-prev")?.addEventListener("click", () => lightboxNav(-1));
     document.getElementById("lightbox-next")?.addEventListener("click", () => lightboxNav(1));
+    els.lightbox?.addEventListener("click", (e) => {
+      if (e.target === els.lightbox) els.lightbox.close();
+    });
     els.lightbox?.addEventListener("keydown", (e) => {
       if (e.key === "ArrowLeft") lightboxNav(-1);
       if (e.key === "ArrowRight") lightboxNav(1);

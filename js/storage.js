@@ -2,7 +2,6 @@
 window.LefamiStorage = {
   mode: "demo",
   backend: null,
-  user: null,
 
   isConfigured() {
     const c = window.LEFAMI_CONFIG || {};
@@ -25,6 +24,11 @@ window.LefamiStorage = {
       await this.backend.init();
     }
     return this.mode;
+  },
+
+  async tryRestore() {
+    if (this.backend.tryRestore) return this.backend.tryRestore();
+    return false;
   },
 
   async signIn() {
@@ -51,8 +55,8 @@ window.LefamiStorage = {
     return this.backend.createFamily(name);
   },
 
-  listPhotos(familyId) {
-    return this.backend.listPhotos(familyId);
+  listPhotos(familyId, familiesCache) {
+    return this.backend.listPhotos(familyId, familiesCache);
   },
 
   uploadPhoto(payload, onProgress) {

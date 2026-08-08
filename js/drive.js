@@ -5,12 +5,13 @@
  */
 window.LefamiDrive = (() => {
   const DISCOVERY = "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
-  // drive: đọc/ghi thư mục gia đình dùng chung. userinfo: hiện tên người đăng
   const SCOPES =
     "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
+  const TOKEN_KEY = "lefami_drive_session";
 
   let tokenClient = null;
   let accessToken = null;
+  let tokenExpiresAt = 0;
   let user = null;
   let gapiReady = false;
 
@@ -18,36 +19,53 @@ window.LefamiDrive = (() => {
     return window.LEFAMI_CONFIG;
   }
 
-  function waitFor(fn, timeout = 15000) {
+  function waitFor(fn, timeout = 20000) {
     return new Promise((resolve, reject) => {
       const start = Date.now();
       const tick = () => {
         if (fn()) return resolve();
         if (Date.now() - start > timeout) return reject(new Error("Google API tải quá lâu"));
-        requestAnimationFrame(tick);
+        setTimeout(tick, 50);
       };
       tick();
     });
   }
 
-  async function init() {
-    await waitFor(() => window.gapi && window.google?.accounts?.oauth2);
-    await new Promise((resolve) => gapi.load("client", resolve));
-    await gapi.client.init({
-      apiKey: cfg().API_KEY,
-      discoveryDocs: [DISCOVERY],
-    });
-    gapiReady = true;
+  function saveSession() {
+    if (!accessToken || !user) return;
+    try {
+      localStorage.setItem(
+        TOKEN_KEY,
+        JSON.stringify({
+          accessToken,
+          expiresAt: tokenExpiresAt,
+          user,
+        })
+      );
+    } catch (_) {}
+  }
 
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: cfg().CLIENT_ID,
-      scope: SCOPES,
-      callback: () => {},
-    });
+  function clearSession() {
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+    } catch (_) {}
+  }
+
+  function loadSession() {
+    try {
+      const raw = localStorage.getItem(TOKEN_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (_) {
+      return null;
+    }
   }
 
   function setToken(tokenResponse) {
     accessToken = tokenResponse.access_token;
+    const expiresIn = Number(tokenResponse.expires_in || 3600);
+    // hết hạn sớm 60s để kịp refresh
+    tokenExpiresAt = Date.now() + Math.max(60, expiresIn - 60) * 1000;
     gapi.client.setToken({ access_token: accessToken });
   }
 
@@ -66,6 +84,71 @@ window.LefamiDrive = (() => {
     return user;
   }
 
+  async function init() {
+    await waitFor(() => window.gapi && window.google?.accounts?.oauth2);
+    await new Promise((resolve) => gapi.load("client", resolve));
+    await gapi.client.init({
+      apiKey: cfg().API_KEY,
+      discoveryDocs: [DISCOVERY],
+    });
+    gapiReady = true;
+
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: cfg().CLIENT_ID,
+      scope: SCOPES,
+      callback: () => {},
+    });
+  }
+
+  /** Khôi phục phiên sau reload (không hiện popup nếu token còn hạn) */
+  async function tryRestore() {
+    const saved = loadSession();
+    if (!saved?.accessToken || !saved?.user) return false;
+
+    if (saved.expiresAt && Date.now() < saved.expiresAt) {
+      accessToken = saved.accessToken;
+      tokenExpiresAt = saved.expiresAt;
+      user = saved.user;
+      gapi.client.setToken({ access_token: accessToken });
+      return true;
+    }
+
+    // Token hết hạn → xin lại im lặng (không consent lại)
+    try {
+      await silentRefresh();
+      return Boolean(accessToken && user);
+    } catch (_) {
+      clearSession();
+      accessToken = null;
+      user = null;
+      return false;
+    }
+  }
+
+  function silentRefresh() {
+    return new Promise((resolve, reject) => {
+      if (!tokenClient) {
+        reject(new Error("Google chưa sẵn sàng"));
+        return;
+      }
+      tokenClient.callback = async (resp) => {
+        if (resp.error) {
+          reject(new Error(resp.error_description || resp.error));
+          return;
+        }
+        try {
+          setToken(resp);
+          if (!user) await fetchUser();
+          saveSession();
+          resolve(user);
+        } catch (e) {
+          reject(e);
+        }
+      };
+      tokenClient.requestAccessToken({ prompt: "" });
+    });
+  }
+
   function signIn() {
     return new Promise((resolve, reject) => {
       if (!tokenClient) {
@@ -80,22 +163,29 @@ window.LefamiDrive = (() => {
         try {
           setToken(resp);
           await fetchUser();
+          saveSession();
           resolve(user);
         } catch (e) {
           reject(e);
         }
       };
-      tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
+      // Đã từng đăng nhập → không bắt consent lại
+      const saved = loadSession();
+      tokenClient.requestAccessToken({ prompt: saved ? "" : "consent" });
     });
   }
 
   async function signOut() {
     if (accessToken) {
-      google.accounts.oauth2.revoke(accessToken, () => {});
+      try {
+        google.accounts.oauth2.revoke(accessToken, () => {});
+      } catch (_) {}
       gapi.client.setToken(null);
       accessToken = null;
       user = null;
+      tokenExpiresAt = 0;
     }
+    clearSession();
   }
 
   function isSignedIn() {
@@ -106,7 +196,13 @@ window.LefamiDrive = (() => {
     return user;
   }
 
+  async function ensureToken() {
+    if (accessToken && Date.now() < tokenExpiresAt) return;
+    await silentRefresh();
+  }
+
   async function listFamilies() {
+    await ensureToken();
     const root = cfg().ROOT_FOLDER_ID;
     const q = `'${root}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
     const res = await gapi.client.drive.files.list({
@@ -121,6 +217,7 @@ window.LefamiDrive = (() => {
   }
 
   async function createFamily(name) {
+    await ensureToken();
     const clean = String(name || "").trim();
     if (!clean) throw new Error("Tên gia đình không được trống");
     const res = await gapi.client.drive.files.create({
@@ -156,29 +253,34 @@ window.LefamiDrive = (() => {
     const res = await gapi.client.drive.files.list({
       q,
       fields:
-        "files(id, name, description, createdTime, mimeType, thumbnailLink, webContentLink, appProperties, parents)",
-      pageSize: 200,
+        "files(id, name, description, createdTime, mimeType, thumbnailLink, appProperties, parents)",
+      pageSize: 100,
       orderBy: "createdTime desc",
     });
     return (res.result.files || []).map((f) => parsePhoto(f, familyName));
   }
 
-  async function listPhotos(familyId) {
+  async function listPhotos(familyId, familiesCache) {
+    await ensureToken();
     if (familyId && familyId !== "all") {
-      const families = await listFamilies();
-      const fam = families.find((f) => f.id === familyId);
+      const fam = (familiesCache || []).find((f) => f.id === familyId);
       return listFolderPhotos(familyId, fam?.name);
     }
 
-    const families = await listFamilies();
+    const families = familiesCache || (await listFamilies());
     const real = families.filter((f) => f.id !== "all");
-    const batches = await Promise.all(
-      real.map((f) => listFolderPhotos(f.id, f.name))
-    );
-    return batches.flat();
+    // Giới hạn song song để tránh lag / rate limit
+    const out = [];
+    for (let i = 0; i < real.length; i += 3) {
+      const chunk = real.slice(i, i + 3);
+      const batch = await Promise.all(chunk.map((f) => listFolderPhotos(f.id, f.name)));
+      out.push(...batch.flat());
+    }
+    return out;
   }
 
   async function uploadPhoto({ file, familyId, familyName, note, takenAt }, onProgress) {
+    await ensureToken();
     if (!familyId || familyId === "all") {
       throw new Error("Hãy chọn một gia đình cụ thể để tải lên");
     }
@@ -206,8 +308,7 @@ window.LefamiDrive = (() => {
       "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
       JSON.stringify(metadata);
     const mediaPart =
-      delimiter +
-      `Content-Type: ${file.type || "image/jpeg"}\r\n\r\n`;
+      delimiter + `Content-Type: ${file.type || "image/jpeg"}\r\n\r\n`;
 
     const metaBytes = new TextEncoder().encode(metaPart + mediaPart);
     const endBytes = new TextEncoder().encode(closeDelim);
@@ -219,7 +320,7 @@ window.LefamiDrive = (() => {
     if (onProgress) onProgress(0.3);
 
     const res = await fetch(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,description,createdTime,mimeType,thumbnailLink,webContentLink,appProperties,parents",
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,description,createdTime,mimeType,thumbnailLink,appProperties,parents",
       {
         method: "POST",
         headers: {
@@ -242,20 +343,20 @@ window.LefamiDrive = (() => {
 
   function getThumbnailUrl(photo) {
     if (photo.thumbnailLink) {
-      return photo.thumbnailLink.replace(/=s\d+$/, "=s800");
+      return photo.thumbnailLink.replace(/=s\d+$/, "=s400");
     }
     return "";
   }
 
   function getViewUrl(photo) {
     if (photo.thumbnailLink) {
-      return photo.thumbnailLink.replace(/=s\d+$/, "=s2000");
+      return photo.thumbnailLink.replace(/=s\d+$/, "=s1200");
     }
     return "";
   }
 
-  /** Tải ảnh full qua API (khi thumbnail hết hạn / không có) */
   async function fetchBlobUrl(fileId) {
+    await ensureToken();
     const res = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -267,6 +368,7 @@ window.LefamiDrive = (() => {
 
   return {
     init,
+    tryRestore,
     signIn,
     signOut,
     isSignedIn,

@@ -9,11 +9,13 @@
   const $ = (id) => document.getElementById(id);
 
   function show(el, on = true) {
+    if (!el) return;
     el.classList.toggle("hidden", !on);
   }
 
   function setHeaderSolid() {
     const header = document.querySelector(".site-header");
+    if (!header) return;
     header.classList.toggle("is-solid", window.scrollY > window.innerHeight * 0.55);
   }
 
@@ -69,7 +71,12 @@
       });
     });
 
-    LefamiUpload.fillFamilies(state.families, state.activeFamilyId === "all" ? state.families.find((f) => f.id !== "all")?.id : state.activeFamilyId);
+    LefamiUpload.fillFamilies(
+      state.families,
+      state.activeFamilyId === "all"
+        ? state.families.find((f) => f.id !== "all")?.id
+        : state.activeFamilyId
+    );
   }
 
   function escapeHtml(s) {
@@ -90,7 +97,10 @@
 
   async function refreshPhotos() {
     try {
-      const photos = await LefamiStorage.listPhotos(state.activeFamilyId);
+      const photos = await LefamiStorage.listPhotos(
+        state.activeFamilyId,
+        state.families
+      );
       LefamiTimeline.setPhotos(photos);
     } catch (err) {
       console.error(err);
@@ -165,8 +175,26 @@
     LefamiUpload.open();
   }
 
+  function closeFamilyModal() {
+    const modal = $("family-modal");
+    if (modal?.open) modal.close();
+    $("family-name").value = "";
+  }
+
   function bindUi() {
-    window.addEventListener("scroll", setHeaderSolid, { passive: true });
+    let scrollTicking = false;
+    window.addEventListener(
+      "scroll",
+      () => {
+        if (scrollTicking) return;
+        scrollTicking = true;
+        requestAnimationFrame(() => {
+          setHeaderSolid();
+          scrollTicking = false;
+        });
+      },
+      { passive: true }
+    );
     setHeaderSolid();
 
     $("btn-signin")?.addEventListener("click", handleSignIn);
@@ -190,6 +218,17 @@
     });
     $("btn-create-family")?.addEventListener("click", createFamily);
 
+    const familyModal = $("family-modal");
+    familyModal?.querySelectorAll("[data-close-family]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        closeFamilyModal();
+      });
+    });
+    familyModal?.addEventListener("click", (e) => {
+      if (e.target === familyModal) closeFamilyModal();
+    });
+
     $("sort-order")?.addEventListener("change", (e) => {
       LefamiTimeline.setSort(e.target.value);
     });
@@ -200,7 +239,6 @@
 
     LefamiTimeline.bindChrome();
     LefamiUpload.bind(async () => {
-      await refreshFamilies();
       await refreshPhotos();
     });
   }
@@ -217,9 +255,17 @@
       return;
     }
 
-    // Drive mode — require sign-in
+    // Drive: thử khôi phục phiên đã lưu
     show($("auth-gate"), true);
     renderUser();
+    try {
+      const restored = await LefamiStorage.tryRestore();
+      if (restored) {
+        await enterApp();
+      }
+    } catch (err) {
+      console.warn("Không khôi phục được phiên", err);
+    }
   }
 
   if (document.readyState === "loading") {

@@ -1,15 +1,19 @@
 /** Upload queue — EXIF date, note, family, batch upload */
 window.LefamiUpload = (() => {
   let queue = [];
+  let onUploadedCb = null;
 
   const $ = (id) => document.getElementById(id);
 
   function open() {
-    $("upload-modal").showModal();
+    const modal = $("upload-modal");
+    if (!modal.open) modal.showModal();
   }
 
   function close() {
-    $("upload-modal").close();
+    resetQueue();
+    const modal = $("upload-modal");
+    if (modal?.open) modal.close();
   }
 
   function resetQueue() {
@@ -18,26 +22,35 @@ window.LefamiUpload = (() => {
     });
     queue = [];
     renderQueue();
-    $("btn-start-upload").disabled = true;
-    $("upload-status").textContent = "";
-    $("upload-note").value = "";
+    const btn = $("btn-start-upload");
+    if (btn) btn.disabled = true;
+    const status = $("upload-status");
+    if (status) status.textContent = "";
+    const note = $("upload-note");
+    if (note) note.value = "";
   }
 
   async function addFiles(fileList) {
     const files = [...fileList].filter((f) => f.type.startsWith("image/"));
-    for (const file of files) {
-      const takenAt = await LefamiExif.readTakenAt(file);
-      queue.push({
-        file,
-        takenAt,
-        previewUrl: URL.createObjectURL(file),
-        note: "",
-      });
+    // Đọc EXIF song song, tối đa 4 file một lúc
+    for (let i = 0; i < files.length; i += 4) {
+      const slice = files.slice(i, i + 4);
+      const results = await Promise.all(
+        slice.map(async (file) => {
+          const takenAt = await LefamiExif.readTakenAt(file);
+          return {
+            file,
+            takenAt,
+            previewUrl: URL.createObjectURL(file),
+            note: "",
+          };
+        })
+      );
+      queue.push(...results);
     }
     renderQueue();
     $("btn-start-upload").disabled = queue.length === 0;
 
-    // If all have EXIF, leave datetime empty hint; else set default now
     const missing = queue.some((q) => !q.takenAt);
     if (missing && !$("upload-datetime").value) {
       $("upload-datetime").value = LefamiExif.toDatetimeLocalValue();
@@ -46,6 +59,7 @@ window.LefamiUpload = (() => {
 
   function renderQueue() {
     const root = $("upload-queue");
+    if (!root) return;
     if (!queue.length) {
       root.classList.add("hidden");
       root.innerHTML = "";
@@ -55,20 +69,19 @@ window.LefamiUpload = (() => {
     root.innerHTML = queue
       .map(
         (q, i) => `
-      <div class="upload-queue__item" title="${q.file.name}">
-        <img src="${q.previewUrl}" alt="" />
+      <div class="upload-queue__item" title="${escapeAttr(q.file.name)}">
+        <img src="${q.previewUrl}" alt="" loading="lazy" />
         <span class="exif-badge">${
-          q.takenAt
-            ? LefamiExif.formatShort(q.takenAt)
-            : "Chưa có EXIF"
+          q.takenAt ? LefamiExif.formatShort(q.takenAt) : "Chưa có EXIF"
         }</span>
-        <button type="button" class="btn-text" data-remove="${i}" style="position:absolute;top:0;right:0;background:rgba(0,0,0,.5);color:#fff;padding:0 .35rem;" aria-label="Xóa">×</button>
+        <button type="button" class="queue-remove" data-remove="${i}" aria-label="Xóa">×</button>
       </div>`
       )
       .join("");
 
     root.querySelectorAll("[data-remove]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const i = Number(btn.dataset.remove);
         if (queue[i]?.previewUrl) URL.revokeObjectURL(queue[i].previewUrl);
         queue.splice(i, 1);
@@ -80,6 +93,7 @@ window.LefamiUpload = (() => {
 
   function fillFamilies(families, selectedId) {
     const sel = $("upload-family");
+    if (!sel) return;
     const options = families.filter((f) => f.id !== "all");
     sel.innerHTML = options
       .map(
@@ -100,7 +114,11 @@ window.LefamiUpload = (() => {
       .replace(/"/g, "&quot;");
   }
 
-  async function startUpload(onDone) {
+  function escapeAttr(s) {
+    return escapeHtml(s).replace(/'/g, "&#39;");
+  }
+
+  async function startUpload() {
     const familyId = $("upload-family").value;
     const familyName =
       $("upload-family").selectedOptions[0]?.textContent?.trim() || "";
@@ -138,9 +156,9 @@ window.LefamiUpload = (() => {
         done += 1;
       }
       $("upload-status").textContent = `Đã tải lên ${total} ảnh.`;
-      resetQueue();
+      const cb = onUploadedCb;
       close();
-      if (onDone) await onDone();
+      if (cb) await cb();
     } catch (err) {
       console.error(err);
       $("upload-status").textContent = err.message || "Upload lỗi.";
@@ -149,42 +167,55 @@ window.LefamiUpload = (() => {
   }
 
   function bind(onUploaded) {
+    onUploadedCb = onUploaded;
     const drop = $("dropzone");
     const input = $("file-input");
+    const modal = $("upload-modal");
 
-    $("btn-pick-files").addEventListener("click", () => input.click());
-    drop.addEventListener("click", (e) => {
+    $("btn-pick-files")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      input.click();
+    });
+    drop?.addEventListener("click", (e) => {
       if (e.target.closest("button")) return;
       input.click();
     });
-    input.addEventListener("change", () => {
+    input?.addEventListener("change", () => {
       if (input.files?.length) addFiles(input.files);
       input.value = "";
     });
 
     ["dragenter", "dragover"].forEach((ev) => {
-      drop.addEventListener(ev, (e) => {
+      drop?.addEventListener(ev, (e) => {
         e.preventDefault();
         drop.classList.add("is-drag");
       });
     });
     ["dragleave", "drop"].forEach((ev) => {
-      drop.addEventListener(ev, (e) => {
+      drop?.addEventListener(ev, (e) => {
         e.preventDefault();
         drop.classList.remove("is-drag");
       });
     });
-    drop.addEventListener("drop", (e) => {
+    drop?.addEventListener("drop", (e) => {
       if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
     });
 
-    $("btn-start-upload").addEventListener("click", () => startUpload(onUploaded));
+    $("btn-start-upload")?.addEventListener("click", () => startUpload());
 
-    $("upload-form").addEventListener("submit", (e) => {
-      // closing via cancel
-      if (e.submitter?.value === "cancel") {
-        resetQueue();
-      }
+    // Đóng chắc chắn: nút ×, Huỷ, click nền ngoài
+    modal?.querySelectorAll("[data-close-upload]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        close();
+      });
+    });
+    modal?.addEventListener("click", (e) => {
+      if (e.target === modal) close();
+    });
+    modal?.addEventListener("cancel", (e) => {
+      e.preventDefault();
+      close();
     });
   }
 

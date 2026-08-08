@@ -107,10 +107,10 @@
 
   <!-- Upload modal -->
   <dialog class="modal" id="upload-modal" aria-labelledby="upload-title">
-    <form method="dialog" class="modal__panel" id="upload-form">
+    <div class="modal__panel" id="upload-form">
       <header class="modal__head">
         <h2 id="upload-title">Thêm kỷ niệm</h2>
-        <button type="submit" class="btn-icon" value="cancel" aria-label="Đóng">×</button>
+        <button type="button" class="btn-icon" data-close-upload aria-label="Đóng">×</button>
       </header>
       <div class="modal__body">
         <div class="dropzone" id="dropzone">
@@ -123,7 +123,7 @@
         <div class="form-grid">
           <label class="field">
             <span>Gia đình</span>
-            <select id="upload-family" class="select" required></select>
+            <select id="upload-family" class="select"></select>
           </label>
           <label class="field">
             <span>Thời gian (áp dụng ảnh chưa có ngày EXIF)</span>
@@ -137,30 +137,30 @@
         <p id="upload-status" class="upload-status" aria-live="polite"></p>
       </div>
       <footer class="modal__foot">
-        <button type="submit" class="btn btn--ghost" value="cancel">Huỷ</button>
+        <button type="button" class="btn btn--ghost" data-close-upload>Huỷ</button>
         <button type="button" class="btn btn--primary" id="btn-start-upload" disabled>Tải lên</button>
       </footer>
-    </form>
+    </div>
   </dialog>
 
   <!-- New family modal -->
   <dialog class="modal" id="family-modal" aria-labelledby="family-title">
-    <form method="dialog" class="modal__panel modal__panel--sm" id="family-form">
+    <div class="modal__panel modal__panel--sm" id="family-form">
       <header class="modal__head">
         <h2 id="family-title">Tạo gia đình mới</h2>
-        <button type="submit" class="btn-icon" value="cancel" aria-label="Đóng">×</button>
+        <button type="button" class="btn-icon" data-close-family aria-label="Đóng">×</button>
       </header>
       <div class="modal__body">
         <label class="field">
           <span>Tên gia đình / nhánh</span>
-          <input type="text" id="family-name" class="input" placeholder="Ví dụ: Nhà bác Minh" required maxlength="80" />
+          <input type="text" id="family-name" class="input" placeholder="Ví dụ: Nhà bác Minh" maxlength="80" />
         </label>
       </div>
       <footer class="modal__foot">
-        <button type="submit" class="btn btn--ghost" value="cancel">Huỷ</button>
+        <button type="button" class="btn btn--ghost" data-close-family>Huỷ</button>
         <button type="button" class="btn btn--primary" id="btn-create-family">Tạo</button>
       </footer>
-    </form>
+    </div>
   </dialog>
 
   <!-- Lightbox -->
