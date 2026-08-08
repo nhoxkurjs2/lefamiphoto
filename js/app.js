@@ -16,7 +16,8 @@
   function setHeaderSolid() {
     const header = document.querySelector(".site-header");
     if (!header) return;
-    header.classList.toggle("is-solid", window.scrollY > 80);
+    // Hero mới ngắn hơn — sticky sớm
+    header.classList.toggle("is-solid", window.scrollY > 40);
   }
 
   function updateSubtitle() {
