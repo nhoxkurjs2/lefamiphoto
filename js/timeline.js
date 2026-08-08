@@ -333,9 +333,11 @@ window.LefamiTimeline = (() => {
           LefamiExif.formatShort(photo.takenAt || photo.createdTime) +
           '</p><p class="tl-card__family">' +
           escapeHtml(photo.familyName || "") +
-          '</p><p class="tl-card__note">' +
-          escapeHtml(photo.note || photo.name || "") +
-          "</p></div></div>";
+          "</p>" +
+          (photo.note
+            ? '<p class="tl-card__note">' + escapeHtml(photo.note) + "</p>"
+            : "") +
+          "</div></div>";
         const card = item.querySelector(".tl-card");
         const img = item.querySelector("img");
         if (img) {
