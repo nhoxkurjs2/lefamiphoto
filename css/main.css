@@ -672,6 +672,41 @@ textarea {
   margin-top: 0.1rem;
 }
 
+.btn.is-active-mine {
+  background: var(--moss) !important;
+  color: var(--sand) !important;
+  border-color: var(--moss) !important;
+}
+
+.album-cell__del {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: rgba(163, 59, 44, 0.88);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.album-cell:hover .album-cell__del,
+.album-cell:focus-visible .album-cell__del {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .album-cell__del {
+    opacity: 0.95;
+  }
+}
+
 .album-cell__dl {
   position: absolute;
   top: 0.35rem;
@@ -687,6 +722,7 @@ textarea {
   opacity: 0;
   transition: opacity 0.2s, background 0.2s;
   pointer-events: auto;
+  z-index: 2;
 }
 
 .album-cell:hover .album-cell__dl,
@@ -1039,8 +1075,9 @@ textarea {
   color: var(--moss-mid);
 }
 
-/* Lightbox */
-.lightbox {
+/* Lightbox — BẮT BUỘC flex khi mở (trình duyệt hay ghi đè dialog[open]) */
+.lightbox,
+.lightbox[open] {
   border: none;
   padding: 0;
   width: 100vw;
@@ -1055,6 +1092,9 @@ textarea {
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box;
 }
 
 .lightbox::backdrop {
@@ -1077,32 +1117,27 @@ body.lb-open {
 }
 
 .lightbox__top {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   z-index: 5;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: calc(0.65rem + env(safe-area-inset-top, 0px)) 0.75rem 0.65rem;
-  background: linear-gradient(rgba(14, 12, 10, 0.75), transparent);
-  pointer-events: none;
+  padding: calc(0.55rem + env(safe-area-inset-top, 0px)) 0.75rem 0.55rem;
+  background: #0e0c0a;
 }
 
 .lightbox__top-actions {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  pointer-events: auto;
 }
 
 .lightbox__counter {
   font-size: 0.85rem;
   opacity: 0.85;
-  pointer-events: none;
-  padding-left: 0.25rem;
+  padding-left: 0.15rem;
 }
 
 .btn--sm {
@@ -1110,15 +1145,38 @@ body.lb-open {
   font-size: 0.85rem;
 }
 
+.btn--danger {
+  background: #a33b2c;
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn--danger:hover {
+  background: #c24a38;
+}
+
+.lightbox__body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  align-items: stretch;
+  background: #12100e;
+  overflow: hidden;
+}
+
 .lightbox__stage {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: grid;
   place-items: center;
   overflow: hidden;
   touch-action: none;
   cursor: grab;
-  padding: 3.5rem 0.5rem 4.5rem;
+  padding: 0.35rem;
 }
 
 .lightbox__stage.is-zoomed {
@@ -1139,32 +1197,40 @@ body.lb-open {
   pointer-events: none;
 }
 
-.lightbox__caption {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(2.1rem + env(safe-area-inset-bottom, 0px));
+/* Chữ CHỈ nằm dưới ảnh — không absolute đè hình */
+.lightbox__foot {
+  position: relative;
+  flex: 0 0 auto;
   z-index: 4;
-  margin: 0;
+  padding: 0.7rem 0.9rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+  background: #0e0c0a;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   text-align: center;
-  padding: 0 1rem;
+}
+
+.lightbox__caption {
+  position: static;
+  margin: 0;
+  padding: 0;
   font-size: 0.88rem;
-  opacity: 0.9;
-  pointer-events: none;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+  line-height: 1.45;
+  opacity: 0.95;
+  word-break: break-word;
+  text-shadow: none;
+  left: auto;
+  right: auto;
+  bottom: auto;
 }
 
 .lightbox__hint {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
-  z-index: 4;
-  margin: 0;
-  text-align: center;
+  position: static;
+  margin: 0.35rem 0 0;
+  padding: 0;
   font-size: 0.7rem;
   opacity: 0.45;
-  pointer-events: none;
+  left: auto;
+  right: auto;
+  bottom: auto;
 }
 
 .lightbox__close {
@@ -1201,12 +1267,13 @@ body.lb-open {
     display: none;
   }
 
-  .lightbox__stage {
-    padding: 3.25rem 0 4.25rem;
+  .lightbox__caption {
+    font-size: 0.82rem;
   }
 
-  .lightbox__hint {
-    display: block;
+  #btn-my-photos {
+    padding: 0.45rem 0.55rem;
+    font-size: 0.78rem;
   }
 }
 
@@ -1216,7 +1283,7 @@ body.lb-open {
   }
 }
 
-/* —— Mobile layout polish —— */
+/* Mobile layout polish */
 @media (max-width: 720px) {
   :root {
     --header-h: 3.4rem;

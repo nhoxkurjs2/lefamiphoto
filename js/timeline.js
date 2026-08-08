@@ -6,7 +6,9 @@ window.LefamiTimeline = (() => {
   let sortOrder = "desc";
   let viewMode = localStorage.getItem("lefami_view") || "album";
   let gridCols = Number(localStorage.getItem("lefami_grid") || 3);
+  let mineOnly = false;
   let lightboxIndex = 0;
+  let onPhotosChanged = null;
   let heroTimer = null;
   let heroVisible = true;
   let scrollLockY = 0;
@@ -49,13 +51,33 @@ window.LefamiTimeline = (() => {
   }
 
   function sorted() {
-    const list = photos.slice();
+    let list = photos.slice();
+    if (mineOnly) {
+      list = list.filter(isMine);
+    }
     list.sort((a, b) => {
       const ta = new Date(a.takenAt || a.createdTime || 0).getTime();
       const tb = new Date(b.takenAt || b.createdTime || 0).getTime();
       return sortOrder === "asc" ? ta - tb : tb - ta;
     });
     return list;
+  }
+
+  function isMine(photo) {
+    const u = LefamiStorage.getUser && LefamiStorage.getUser();
+    if (!u || !photo) return false;
+    return (
+      (photo.uploadedById && photo.uploadedById === u.id) ||
+      (photo.uploadedBy && (photo.uploadedBy === u.id || photo.uploadedBy === u.name))
+    );
+  }
+
+  function setMineOnly(on) {
+    mineOnly = !!on;
+    const btn = document.getElementById("btn-my-photos");
+    if (btn) btn.classList.toggle("is-active-mine", mineOnly);
+    render();
+    renderHero();
   }
 
   function thumb(photo) {
@@ -175,7 +197,11 @@ window.LefamiTimeline = (() => {
         (photo.familyName
           ? '<span class="album-cell__fam">' + escapeHtml(photo.familyName) + "</span>"
           : "") +
-        '</span><span class="album-cell__dl" data-dl="1" title="Tải về">↓</span>';
+        "</span>" +
+        (isMine(photo)
+          ? '<span class="album-cell__del" data-del="1" title="Xóa ảnh của tôi">🗑</span>'
+          : "") +
+        '<span class="album-cell__dl" data-dl="1" title="Tải về">↓</span>';
       const img = cell.querySelector("img");
       if (img) {
         img.addEventListener("error", function () {
@@ -183,6 +209,11 @@ window.LefamiTimeline = (() => {
         }, { once: true });
       }
       cell.addEventListener("click", function (e) {
+        if (e.target.closest && e.target.closest("[data-del]")) {
+          e.stopPropagation();
+          deletePhoto(photo);
+          return;
+        }
         if (e.target.closest && e.target.closest("[data-dl]")) {
           e.stopPropagation();
           downloadPhoto(photo);
@@ -399,6 +430,14 @@ window.LefamiTimeline = (() => {
     }
     const counter = document.getElementById("lightbox-counter");
     if (counter) counter.textContent = lightboxIndex + 1 + " / " + list.length;
+
+    const delBtn = document.getElementById("lightbox-delete");
+    if (delBtn) {
+      const mine = isMine(photo);
+      delBtn.classList.toggle("hidden", !mine);
+      delBtn.disabled = false;
+      delBtn.textContent = "Xóa";
+    }
   }
 
   function lightboxNav(dir) {
@@ -564,6 +603,56 @@ window.LefamiTimeline = (() => {
     );
   }
 
+  async function deletePhoto(photo) {
+    if (!photo || !isMine(photo)) {
+      alert("Bạn chỉ có thể xóa ảnh do chính mình tải lên.");
+      return;
+    }
+    const ok = window.confirm(
+      "Xóa ảnh này khỏi kho gia đình?\n\n" +
+        (photo.note || photo.name || "") +
+        "\n\nThao tác không hoàn tác được."
+    );
+    if (!ok) return;
+
+    const delBtn = document.getElementById("lightbox-delete");
+    try {
+      if (delBtn) {
+        delBtn.disabled = true;
+        delBtn.textContent = "Đang xóa...";
+      }
+      await LefamiStorage.deletePhoto(photo.id);
+      photos = photos.filter(function (p) {
+        return p.id !== photo.id;
+      });
+      const list = sorted();
+      if (els.lightbox && els.lightbox.open) {
+        if (!list.length) {
+          lbCloseSafe();
+        } else {
+          lightboxIndex = Math.min(lightboxIndex, list.length - 1);
+          showLightbox(false);
+        }
+      }
+      render();
+      renderHero();
+      if (onPhotosChanged) onPhotosChanged();
+    } catch (err) {
+      console.error(err);
+      alert("Không xóa được ảnh: " + (err.message || err));
+    } finally {
+      if (delBtn) {
+        delBtn.disabled = false;
+        delBtn.textContent = "Xóa";
+      }
+    }
+  }
+
+  function deleteCurrent() {
+    var list = sorted();
+    if (list[lightboxIndex]) deletePhoto(list[lightboxIndex]);
+  }
+
   async function downloadPhoto(photo) {
     if (!photo) return;
     const btn = document.getElementById("lightbox-download");
@@ -629,10 +718,12 @@ window.LefamiTimeline = (() => {
     var lbPrev = document.getElementById("lightbox-prev");
     var lbNext = document.getElementById("lightbox-next");
     var lbDl = document.getElementById("lightbox-download");
+    var lbDel = document.getElementById("lightbox-delete");
     if (lbClose) lbClose.addEventListener("click", lbCloseSafe);
     if (lbPrev) lbPrev.addEventListener("click", function () { lightboxNav(-1); });
     if (lbNext) lbNext.addEventListener("click", function () { lightboxNav(1); });
     if (lbDl) lbDl.addEventListener("click", downloadCurrent);
+    if (lbDel) lbDel.addEventListener("click", deleteCurrent);
 
     if (els.lightbox) {
       els.lightbox.addEventListener("close", function () {
@@ -672,9 +763,17 @@ window.LefamiTimeline = (() => {
     setSort: setSort,
     setView: setView,
     setGrid: setGrid,
+    setMineOnly: setMineOnly,
+    isMineOnly: function () {
+      return mineOnly;
+    },
     openLightbox: openLightbox,
     bindChrome: bindChrome,
     downloadPhoto: downloadPhoto,
+    deletePhoto: deletePhoto,
+    onChange: function (cb) {
+      onPhotosChanged = cb;
+    },
     getPhotos: sorted,
   };
 })();

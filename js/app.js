@@ -215,6 +215,20 @@
     $("btn-signin-header")?.addEventListener("click", handleSignIn);
     $("btn-signout")?.addEventListener("click", handleSignOut);
     $("btn-upload")?.addEventListener("click", openUpload);
+    $("btn-my-photos")?.addEventListener("click", () => {
+      if (LefamiStorage.mode === "drive" && !LefamiStorage.isSignedIn()) {
+        show($("auth-gate"), true);
+        return;
+      }
+      const next = !LefamiTimeline.isMineOnly();
+      LefamiTimeline.setMineOnly(next);
+      const fam = state.families.find((f) => f.id === state.activeFamilyId);
+      $("gallery-subtitle").textContent = next
+        ? "Ảnh bạn đã tải lên — có thể xóa nếu tải nhầm."
+        : state.activeFamilyId === "all"
+          ? "Tất cả ảnh của đại gia đình."
+          : `Album của ${fam?.name || "gia đình"} — xem dạng lưới hoặc dòng thời gian.`;
+    });
 
     $("btn-scroll-gallery")?.addEventListener("click", () => {
       $("gallery")?.scrollIntoView({ behavior: "smooth" });

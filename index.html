@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/main.css?v=5" />
+  <link rel="stylesheet" href="css/main.css?v=6" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%232c3d32' width='64' height='64' rx='12'/%3E%3Cpath fill='%23d4a574' d='M18 40l10-14 8 10 6-8 10 12H18z'/%3E%3Ccircle fill='%23e8d5b7' cx='24' cy='22' r='4'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -31,6 +31,7 @@
   <header class="site-header">
     <a href="#top" class="logo" id="logo">Lefami</a>
     <nav class="header-nav" aria-label="Chính">
+      <button type="button" class="btn btn--ghost" id="btn-my-photos">Ảnh của tôi</button>
       <button type="button" class="btn btn--ghost" id="btn-upload">Thêm ảnh</button>
       <button type="button" class="btn btn--ghost hidden" id="btn-signin-header">Đăng nhập</button>
       <div id="user-chip" class="user-chip hidden">
@@ -173,6 +174,7 @@
     <header class="lightbox__top">
       <span class="lightbox__counter" id="lightbox-counter"></span>
       <div class="lightbox__top-actions">
+        <button type="button" class="btn btn--danger btn--sm hidden" id="lightbox-delete">Xóa</button>
         <button type="button" class="btn btn--light btn--sm" id="lightbox-download">Tải về</button>
         <button type="button" class="lightbox__close btn-icon" id="lightbox-close" aria-label="Đóng">×</button>
       </div>
@@ -186,20 +188,20 @@
     </div>
     <footer class="lightbox__foot">
       <p class="lightbox__caption" id="lightbox-caption"></p>
-      <p class="lightbox__hint">Vuốt để đổi ảnh · Chạm 2 lần để zoom / bỏ zoom</p>
+      <p class="lightbox__hint">Vuốt đổi ảnh · Chạm 2 lần zoom / bỏ zoom</p>
     </footer>
   </dialog>
 
-  <script src="js/config.js?v=5"></script>
+  <script src="js/config.js?v=6"></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/lite.umd.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
-  <script src="js/exif.js?v=5"></script>
-  <script src="js/storage.js?v=5"></script>
-  <script src="js/drive.js?v=5"></script>
-  <script src="js/demo.js?v=5"></script>
-  <script src="js/timeline.js?v=5"></script>
-  <script src="js/upload.js?v=5"></script>
-  <script src="js/app.js?v=5"></script>
+  <script src="js/exif.js?v=6"></script>
+  <script src="js/storage.js?v=6"></script>
+  <script src="js/drive.js?v=6"></script>
+  <script src="js/demo.js?v=6"></script>
+  <script src="js/timeline.js?v=6"></script>
+  <script src="js/upload.js?v=6"></script>
+  <script src="js/app.js?v=6"></script>
 </body>
 </html>

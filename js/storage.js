@@ -63,6 +63,13 @@ window.LefamiStorage = {
     return this.backend.uploadPhoto(payload, onProgress);
   },
 
+  async deletePhoto(id) {
+    if (this.backend.deletePhoto) {
+      return this.backend.deletePhoto(id);
+    }
+    throw new Error("Không hỗ trợ xóa ảnh");
+  },
+
   getThumbnailUrl(photo) {
     return this.backend.getThumbnailUrl(photo);
   },

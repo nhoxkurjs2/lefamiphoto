@@ -64,6 +64,12 @@ window.LefamiDemo = (() => {
     return txDone(tx);
   }
 
+  function del(storeName, id) {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).delete(id);
+    return txDone(tx);
+  }
+
   function uid(prefix) {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
@@ -147,6 +153,7 @@ window.LefamiDemo = (() => {
       const { dataUrl, ...meta } = p;
       await put("photos", {
         ...meta,
+        uploadedById: "demo-user",
         uploadedBy: "Demo",
         createdTime: meta.takenAt,
       });
@@ -215,6 +222,7 @@ window.LefamiDemo = (() => {
       takenAt: takenAt || new Date().toISOString(),
       familyId,
       familyName: familyName || "",
+      uploadedById: user.id,
       uploadedBy: user.name,
       createdTime: new Date().toISOString(),
     };
@@ -260,6 +268,11 @@ window.LefamiDemo = (() => {
       return enrich(photos);
     },
     uploadPhoto,
+    async deletePhoto(id) {
+      await del("photos", id);
+      await del("blobs", id);
+      return true;
+    },
     getThumbnailUrl(photo) {
       return photo._url || photo.thumbnailLink || "";
     },

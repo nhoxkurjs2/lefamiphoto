@@ -240,7 +240,8 @@ window.LefamiDrive = (() => {
       takenAt: props.takenAt || file.createdTime,
       familyId: props.familyId || (file.parents && file.parents[0]) || "",
       familyName: props.familyName || familyName || "",
-      uploadedBy: props.uploadedByName || props.uploadedBy || "",
+      uploadedById: props.uploadedBy || "",
+      uploadedBy: props.uploadedByName || "",
       createdTime: file.createdTime,
       thumbnailLink: file.thumbnailLink || "",
       webContentLink: file.webContentLink || "",
@@ -380,6 +381,12 @@ window.LefamiDrive = (() => {
     getThumbnailUrl,
     getViewUrl,
     fetchBlobUrl,
+    async deletePhoto(fileId) {
+      await ensureToken();
+      if (!fileId) throw new Error("Thiếu id ảnh");
+      await gapi.client.drive.files.delete({ fileId });
+      return true;
+    },
     get gapiReady() {
       return gapiReady;
     },
