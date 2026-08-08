@@ -34,27 +34,11 @@ body {
   font-family: var(--font-body);
   color: var(--ink);
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(196, 146, 74, 0.12), transparent 60%),
-    radial-gradient(900px 500px at 100% 20%, rgba(44, 61, 50, 0.08), transparent 55%),
-    linear-gradient(180deg, var(--mist) 0%, var(--paper) 40%, #efe8dc 100%);
+    radial-gradient(900px 480px at 8% -8%, rgba(196, 146, 74, 0.1), transparent 55%),
+    linear-gradient(180deg, var(--mist) 0%, var(--paper) 50%, #efe8dc 100%);
   min-height: 100vh;
   line-height: 1.55;
   overflow-x: hidden;
-}
-
-.grain {
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  opacity: 0.03;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .grain {
-    display: none;
-  }
 }
 
 img {
@@ -379,12 +363,19 @@ textarea {
 }
 
 .hero__slide.is-active img {
-  animation: kenburns 14s ease-in-out infinite alternate;
+  animation: kenburns 16s ease-in-out infinite alternate;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hero__slide.is-active img {
     animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .hero__slide.is-active img {
+    animation: none;
+    transform: scale(1.02);
   }
 }
 
@@ -540,11 +531,68 @@ textarea {
   border-color: var(--moss);
 }
 
-/* Timeline */
+/* Timeline / Gallery */
+.gallery-section,
 .timeline-section {
   padding: 2rem 1.25rem 5rem;
-  max-width: 920px;
+  max-width: 1100px;
   margin: 0 auto;
+}
+
+.gallery-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.gallery-toolbar__right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.view-toggle__btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.view-toggle__btn.is-active {
+  background: var(--moss);
+  color: var(--sand);
+}
+
+.toolbar-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.select--sm {
+  width: auto;
+  min-width: 7rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.88rem;
 }
 
 .timeline-toolbar {
@@ -571,10 +619,146 @@ textarea {
   color: var(--ink-soft);
 }
 
+.timeline-empty .hint {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+/* Album grid */
+.album-grid {
+  display: grid;
+  gap: 0.55rem;
+  content-visibility: auto;
+  contain-intrinsic-size: 800px;
+}
+
+.album-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.album-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.album-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.album-grid.cols-5 { grid-template-columns: repeat(5, 1fr); }
+.album-grid.cols-6 { grid-template-columns: repeat(6, 1fr); }
+
+@media (max-width: 720px) {
+  .album-grid.cols-4,
+  .album-grid.cols-5,
+  .album-grid.cols-6 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .album-grid.cols-3,
+  .album-grid.cols-4,
+  .album-grid.cols-5,
+  .album-grid.cols-6 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.album-cell {
+  position: relative;
+  appearance: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: #ddd5c8;
+  aspect-ratio: 1;
+  overflow: hidden;
+  cursor: pointer;
+  content-visibility: auto;
+  contain-intrinsic-size: 200px;
+}
+
+.album-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.45s var(--ease);
+  will-change: transform;
+}
+
+.album-cell:hover img,
+.album-cell:focus-visible img {
+  transform: scale(1.04);
+}
+
+.album-cell__meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1.4rem 0.45rem 0.4rem;
+  background: linear-gradient(transparent, rgba(20, 18, 15, 0.72));
+  color: var(--sand);
+  text-align: left;
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+
+.album-cell:hover .album-cell__meta,
+.album-cell:focus-visible .album-cell__meta {
+  opacity: 1;
+}
+
+.album-cell__date {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.album-cell__fam {
+  display: block;
+  font-size: 0.65rem;
+  opacity: 0.85;
+  margin-top: 0.1rem;
+}
+
+.album-cell__dl {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: rgba(28, 26, 23, 0.55);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+  pointer-events: auto;
+}
+
+.album-cell:hover .album-cell__dl,
+.album-cell:focus-visible .album-cell__dl {
+  opacity: 1;
+}
+
+.album-cell__dl:hover {
+  background: var(--amber);
+  color: var(--ink);
+}
+
+@media (hover: none) {
+  .album-cell__meta,
+  .album-cell__dl {
+    opacity: 1;
+  }
+  .album-cell__meta {
+    padding-top: 0.8rem;
+    background: linear-gradient(transparent, rgba(20, 18, 15, 0.55));
+  }
+}
+
 .timeline {
   position: relative;
   padding: 0.5rem 0 2rem;
+  max-width: 920px;
+  margin: 0 auto;
 }
+
 
 .timeline::before {
   content: "";
@@ -913,6 +1097,21 @@ textarea {
   background: transparent;
 }
 
+.lightbox__top {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn--sm {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.85rem;
+}
+
 .lightbox__figure {
   margin: 0;
   height: 100%;
@@ -940,10 +1139,7 @@ textarea {
 }
 
 .lightbox__close {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 2;
+  position: static;
 }
 
 .lightbox__nav {

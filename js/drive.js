@@ -343,14 +343,14 @@ window.LefamiDrive = (() => {
 
   function getThumbnailUrl(photo) {
     if (photo.thumbnailLink) {
-      return photo.thumbnailLink.replace(/=s\d+$/, "=s400");
+      return photo.thumbnailLink.replace(/=s\d+$/, "=s360");
     }
     return "";
   }
 
   function getViewUrl(photo) {
     if (photo.thumbnailLink) {
-      return photo.thumbnailLink.replace(/=s\d+$/, "=s1200");
+      return photo.thumbnailLink.replace(/=s\d+$/, "=s1280");
     }
     return "";
   }

@@ -16,7 +16,18 @@
   function setHeaderSolid() {
     const header = document.querySelector(".site-header");
     if (!header) return;
-    header.classList.toggle("is-solid", window.scrollY > window.innerHeight * 0.55);
+    header.classList.toggle("is-solid", window.scrollY > 80);
+  }
+
+  function updateSubtitle() {
+    const fam = state.families.find((f) => f.id === state.activeFamilyId);
+    const el = $("gallery-subtitle");
+    if (!el) return;
+    if (state.activeFamilyId === "all") {
+      el.textContent = "Tất cả ảnh của đại gia đình.";
+    } else {
+      el.textContent = `Album của ${fam?.name || "gia đình"} — xem dạng lưới hoặc dòng thời gian.`;
+    }
   }
 
   function renderUser() {
@@ -31,7 +42,6 @@
         $("user-avatar").src = user.picture;
         $("user-avatar").classList.remove("hidden");
       } else {
-        $("user-avatar").removeAttribute("src");
         $("user-avatar").classList.add("hidden");
       }
     } else if (LefamiStorage.mode === "demo") {
@@ -62,12 +72,8 @@
       btn.addEventListener("click", () => {
         state.activeFamilyId = btn.dataset.id;
         renderFamilies();
+        updateSubtitle();
         refreshPhotos();
-        const fam = state.families.find((f) => f.id === state.activeFamilyId);
-        $("timeline-subtitle").textContent =
-          state.activeFamilyId === "all"
-            ? "Tất cả kỷ niệm, sắp xếp theo ngày chụp."
-            : `Kỷ niệm của ${fam?.name || ""} — sắp xếp theo ngày chụp.`;
       });
     });
 
@@ -93,14 +99,12 @@
       state.activeFamilyId = "all";
     }
     renderFamilies();
+    updateSubtitle();
   }
 
   async function refreshPhotos() {
     try {
-      const photos = await LefamiStorage.listPhotos(
-        state.activeFamilyId,
-        state.families
-      );
+      const photos = await LefamiStorage.listPhotos(state.activeFamilyId, state.families);
       LefamiTimeline.setPhotos(photos);
     } catch (err) {
       console.error(err);
@@ -200,13 +204,10 @@
     $("btn-signin")?.addEventListener("click", handleSignIn);
     $("btn-signin-header")?.addEventListener("click", handleSignIn);
     $("btn-signout")?.addEventListener("click", handleSignOut);
-
     $("btn-upload")?.addEventListener("click", openUpload);
-    $("btn-upload-hero")?.addEventListener("click", openUpload);
-    $("btn-upload-empty")?.addEventListener("click", openUpload);
 
-    $("btn-scroll-timeline")?.addEventListener("click", () => {
-      $("timeline").scrollIntoView({ behavior: "smooth" });
+    $("btn-scroll-gallery")?.addEventListener("click", () => {
+      $("gallery")?.scrollIntoView({ behavior: "smooth" });
     });
 
     $("btn-new-family")?.addEventListener("click", () => {
@@ -233,9 +234,7 @@
       LefamiTimeline.setSort(e.target.value);
     });
 
-    $("btn-dismiss-demo")?.addEventListener("click", () => {
-      show($("demo-banner"), false);
-    });
+    $("btn-dismiss-demo")?.addEventListener("click", () => show($("demo-banner"), false));
 
     LefamiTimeline.bindChrome();
     LefamiUpload.bind(async () => {
@@ -255,14 +254,10 @@
       return;
     }
 
-    // Drive: thử khôi phục phiên đã lưu
     show($("auth-gate"), true);
     renderUser();
     try {
-      const restored = await LefamiStorage.tryRestore();
-      if (restored) {
-        await enterApp();
-      }
+      if (await LefamiStorage.tryRestore()) await enterApp();
     } catch (err) {
       console.warn("Không khôi phục được phiên", err);
     }
