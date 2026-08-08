@@ -1,5 +1,5 @@
 /**
- * Gallery: Album lưới + Timeline + Hero strip + Lightbox + Download
+ * Gallery + hero strip + lightbox (vuốt / zoom mượt trên mobile)
  */
 window.LefamiTimeline = (() => {
   let photos = [];
@@ -9,8 +9,26 @@ window.LefamiTimeline = (() => {
   let lightboxIndex = 0;
   let heroTimer = null;
   let heroVisible = true;
+  let scrollLockY = 0;
+  let lbOpen = false;
 
   const els = {};
+
+  /* —— Zoom / pan state —— */
+  const z = {
+    scale: 1,
+    x: 0,
+    y: 0,
+    min: 1,
+    max: 4,
+  };
+  let pointers = new Map();
+  let pinchStartDist = 0;
+  let pinchStartScale = 1;
+  let panStart = null;
+  let swipeStart = null;
+  let lastTap = 0;
+  let animating = false;
 
   function cacheEls() {
     els.album = document.getElementById("album-root");
@@ -19,11 +37,11 @@ window.LefamiTimeline = (() => {
       document.getElementById("gallery-empty") ||
       document.getElementById("timeline-empty");
     els.count = document.getElementById("photo-count");
-    els.subtitle = document.getElementById("gallery-subtitle");
     els.heroTrack = document.getElementById("hero-track");
     els.heroStrip = document.getElementById("hero-strip");
     els.hero = document.querySelector(".hero");
     els.lightbox = document.getElementById("lightbox");
+    els.stage = document.getElementById("lightbox-stage");
     els.lightboxImg = document.getElementById("lightbox-img");
     els.lightboxCaption = document.getElementById("lightbox-caption");
     els.gridWrap = document.getElementById("grid-size-wrap");
@@ -106,6 +124,14 @@ window.LefamiTimeline = (() => {
     els.empty.classList.toggle("hidden", !show);
   }
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   function render() {
     cacheEls();
     const list = sorted();
@@ -116,12 +142,8 @@ window.LefamiTimeline = (() => {
       els.album.className =
         "album-grid cols-" + gridCols + (showAlbum ? "" : " hidden");
     }
-    if (els.timeline) {
-      els.timeline.classList.toggle("hidden", showAlbum);
-    }
-    if (els.gridWrap) {
-      els.gridWrap.classList.toggle("hidden", !showAlbum);
-    }
+    if (els.timeline) els.timeline.classList.toggle("hidden", showAlbum);
+    if (els.gridWrap) els.gridWrap.classList.toggle("hidden", !showAlbum);
 
     if (!list.length) {
       if (els.album) els.album.innerHTML = "";
@@ -130,7 +152,6 @@ window.LefamiTimeline = (() => {
       return;
     }
     toggleEmpty(false);
-
     if (showAlbum) renderAlbum(list);
     else renderTimeline(list);
   }
@@ -148,23 +169,21 @@ window.LefamiTimeline = (() => {
         '<img src="' +
         thumb(photo) +
         '" alt="" loading="lazy" decoding="async" width="320" height="320" />' +
-        '<span class="album-cell__meta">' +
-        '<span class="album-cell__date">' +
+        '<span class="album-cell__meta"><span class="album-cell__date">' +
         LefamiExif.formatShort(photo.takenAt || photo.createdTime) +
         "</span>" +
         (photo.familyName
-          ? '<span class="album-cell__fam">' +
-            escapeHtml(photo.familyName) +
-            "</span>"
+          ? '<span class="album-cell__fam">' + escapeHtml(photo.familyName) + "</span>"
           : "") +
-        "</span>" +
-        '<span class="album-cell__dl" data-dl="1" title="Tải về">↓</span>';
+        '</span><span class="album-cell__dl" data-dl="1" title="Tải về">↓</span>';
       const img = cell.querySelector("img");
-      img.addEventListener("error", function () {
-        recoverImage(img, photo);
-      }, { once: true });
+      if (img) {
+        img.addEventListener("error", function () {
+          recoverImage(img, photo);
+        }, { once: true });
+      }
       cell.addEventListener("click", function (e) {
-        if (e.target.closest("[data-dl]")) {
+        if (e.target.closest && e.target.closest("[data-dl]")) {
           e.stopPropagation();
           downloadPhoto(photo);
           return;
@@ -211,24 +230,25 @@ window.LefamiTimeline = (() => {
           '<div class="tl-card__media"><img src="' +
           thumb(photo) +
           '" alt="" loading="lazy" decoding="async" width="400" height="300" /></div>' +
-          '<div class="tl-card__body">' +
-          '<p class="tl-card__date">' +
+          '<div class="tl-card__body"><p class="tl-card__date">' +
           LefamiExif.formatShort(photo.takenAt || photo.createdTime) +
-          "</p>" +
-          '<p class="tl-card__family">' +
+          '</p><p class="tl-card__family">' +
           escapeHtml(photo.familyName || "") +
-          "</p>" +
-          '<p class="tl-card__note">' +
+          '</p><p class="tl-card__note">' +
           escapeHtml(photo.note || photo.name || "") +
           "</p></div></div>";
         const card = item.querySelector(".tl-card");
         const img = item.querySelector("img");
-        img.addEventListener("error", function () {
-          recoverImage(img, photo);
-        }, { once: true });
-        card.addEventListener("click", function () {
-          openLightbox(photo.id);
-        });
+        if (img) {
+          img.addEventListener("error", function () {
+            recoverImage(img, photo);
+          }, { once: true });
+        }
+        if (card) {
+          card.addEventListener("click", function () {
+            openLightbox(photo.id);
+          });
+        }
         frag.appendChild(item);
       }
     }
@@ -243,7 +263,6 @@ window.LefamiTimeline = (() => {
     }
   }
 
-  /** Hero: dải ảnh ngang, object-fit contain, tự lướt ~10 ảnh mới nhất */
   function renderHero() {
     cacheEls();
     stopHero();
@@ -257,38 +276,84 @@ window.LefamiTimeline = (() => {
       return;
     }
 
-    // Nhân đôi để lướt vòng mượt
     const loop = list.concat(list);
     els.heroTrack.innerHTML = loop
       .map(function (p) {
         return (
-          '<figure class="hero__frame">' +
-          '<img src="' +
+          '<figure class="hero__frame"><img src="' +
           view(p) +
-          '" alt="" decoding="async" loading="lazy" />' +
-          "</figure>"
+          '" alt="" decoding="async" loading="lazy" /></figure>'
         );
       })
       .join("");
 
     els.heroTrack.querySelectorAll("img").forEach(function (img, i) {
-      const photo = loop[i];
       img.addEventListener("error", function () {
-        recoverImage(img, photo);
+        recoverImage(img, loop[i]);
       }, { once: true });
     });
 
     let offset = 0;
-    const speed = 0.45; // px / tick — nhẹ, không rAF nặng
-
+    const speed = 0.4;
     heroTimer = setInterval(function () {
-      if (!heroVisible || !els.heroTrack || !els.heroStrip) return;
-      if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      if (lbOpen || !heroVisible || !els.heroTrack) return;
+      if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+        return;
       offset += speed;
       const half = els.heroTrack.scrollWidth / 2;
       if (half > 0 && offset >= half) offset = 0;
       els.heroTrack.style.transform = "translate3d(" + -offset + "px,0,0)";
-    }, 32);
+    }, 40);
+  }
+
+  /* ========== Lightbox ========== */
+
+  function lockBody() {
+    scrollLockY = window.scrollY || window.pageYOffset || 0;
+    document.documentElement.classList.add("lb-open");
+    document.body.classList.add("lb-open");
+    document.body.style.top = "-" + scrollLockY + "px";
+  }
+
+  function unlockBody() {
+    document.documentElement.classList.remove("lb-open");
+    document.body.classList.remove("lb-open");
+    document.body.style.top = "";
+    window.scrollTo(0, scrollLockY);
+  }
+
+  function applyZoom(animate) {
+    if (!els.lightboxImg) return;
+    els.lightboxImg.style.transition = animate
+      ? "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)"
+      : "none";
+    els.lightboxImg.style.transform =
+      "translate3d(" + z.x + "px," + z.y + "px,0) scale(" + z.scale + ")";
+  }
+
+  function resetZoom(animate) {
+    z.scale = 1;
+    z.x = 0;
+    z.y = 0;
+    applyZoom(!!animate);
+    if (els.stage) els.stage.classList.toggle("is-zoomed", false);
+  }
+
+  function clampPan() {
+    if (!els.lightboxImg || !els.stage) return;
+    const rect = els.stage.getBoundingClientRect();
+    const iw = els.lightboxImg.offsetWidth * z.scale;
+    const ih = els.lightboxImg.offsetHeight * z.scale;
+    const maxX = Math.max(0, (iw - rect.width) / 2);
+    const maxY = Math.max(0, (ih - rect.height) / 2);
+    z.x = Math.min(maxX, Math.max(-maxX, z.x));
+    z.y = Math.min(maxY, Math.max(-maxY, z.y));
+  }
+
+  function dist(a, b) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
   function openLightbox(id) {
@@ -300,32 +365,191 @@ window.LefamiTimeline = (() => {
         return p.id === id;
       })
     );
-    showLightbox();
-    if (els.lightbox && !els.lightbox.open) els.lightbox.showModal();
+    showLightbox(false);
+    if (els.lightbox && !els.lightbox.open) {
+      els.lightbox.showModal();
+      lbOpen = true;
+      lockBody();
+    }
   }
 
-  function showLightbox() {
+  function showLightbox(keepZoom) {
     const list = sorted();
     if (!list.length || !els.lightboxImg) return;
     const photo = list[lightboxIndex];
+    if (!keepZoom) resetZoom(false);
+    // Tránh nháy: ẩn nhẹ rồi hiện
+    els.lightboxImg.style.opacity = "0.01";
+    const onLoad = function () {
+      els.lightboxImg.style.opacity = "1";
+      els.lightboxImg.removeEventListener("load", onLoad);
+    };
+    els.lightboxImg.addEventListener("load", onLoad);
     els.lightboxImg.src = view(photo);
+    if (els.lightboxImg.complete) onLoad();
+
     if (els.lightboxCaption) {
       els.lightboxCaption.textContent = [
         LefamiExif.formatDisplay(photo.takenAt || photo.createdTime),
         photo.familyName,
         photo.note,
-        photo.uploadedBy ? "Đăng bởi " + photo.uploadedBy : "",
       ]
         .filter(Boolean)
         .join(" · ");
     }
+    const counter = document.getElementById("lightbox-counter");
+    if (counter) counter.textContent = lightboxIndex + 1 + " / " + list.length;
   }
 
   function lightboxNav(dir) {
+    if (animating) return;
     const list = sorted();
     if (!list.length) return;
     lightboxIndex = (lightboxIndex + dir + list.length) % list.length;
-    showLightbox();
+    showLightbox(false);
+  }
+
+  function lbCloseSafe() {
+    if (!els.lightbox) return;
+    resetZoom(false);
+    pointers.clear();
+    lbOpen = false;
+    if (els.lightbox.open) els.lightbox.close();
+    unlockBody();
+  }
+
+  function onPointerDown(e) {
+    if (!els.stage || !els.lightbox || !els.lightbox.open) return;
+    if (e.target.closest && e.target.closest(".lightbox__top, .lightbox__nav, .lightbox__caption"))
+      return;
+    els.stage.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size === 2) {
+      const pts = Array.from(pointers.values());
+      pinchStartDist = dist(pts[0], pts[1]) || 1;
+      pinchStartScale = z.scale;
+      panStart = null;
+      swipeStart = null;
+    } else if (pointers.size === 1) {
+      if (z.scale > 1.05) {
+        panStart = { x: e.clientX, y: e.clientY, ox: z.x, oy: z.y };
+        swipeStart = null;
+      } else {
+        swipeStart = { x: e.clientX, y: e.clientY, t: Date.now() };
+        panStart = null;
+      }
+    }
+  }
+
+  function onPointerMove(e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size === 2) {
+      e.preventDefault();
+      const pts = Array.from(pointers.values());
+      const d = dist(pts[0], pts[1]) || 1;
+      z.scale = Math.min(z.max, Math.max(z.min, pinchStartScale * (d / pinchStartDist)));
+      clampPan();
+      applyZoom(false);
+      if (els.stage) els.stage.classList.toggle("is-zoomed", z.scale > 1.05);
+      return;
+    }
+
+    if (pointers.size === 1 && panStart && z.scale > 1.05) {
+      e.preventDefault();
+      z.x = panStart.ox + (e.clientX - panStart.x);
+      z.y = panStart.oy + (e.clientY - panStart.y);
+      clampPan();
+      applyZoom(false);
+    }
+  }
+
+  function onPointerUp(e) {
+    if (!pointers.has(e.pointerId)) return;
+    const wasSwipe = swipeStart && pointers.size === 1 && z.scale <= 1.05;
+    const start = swipeStart;
+    pointers.delete(e.pointerId);
+
+    if (pointers.size < 2) {
+      pinchStartDist = 0;
+    }
+    if (pointers.size === 0) {
+      panStart = null;
+
+      // Double tap zoom
+      const now = Date.now();
+      if (wasSwipe && start) {
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
+        const dt = now - start.t;
+        if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.2 && dt < 450) {
+          lightboxNav(dx < 0 ? 1 : -1);
+          swipeStart = null;
+          return;
+        }
+        // tap
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && dt < 300) {
+          if (now - lastTap < 320) {
+            if (z.scale > 1.05) resetZoom(true);
+            else {
+              z.scale = 2.2;
+              z.x = 0;
+              z.y = 0;
+              applyZoom(true);
+              if (els.stage) els.stage.classList.add("is-zoomed");
+            }
+            lastTap = 0;
+          } else {
+            lastTap = now;
+          }
+        }
+      }
+      swipeStart = null;
+      if (z.scale <= 1.02) resetZoom(true);
+      else {
+        clampPan();
+        applyZoom(true);
+      }
+    }
+  }
+
+  function bindLightboxGestures() {
+    cacheEls();
+    if (!els.stage || els.stage.dataset.bound) return;
+    els.stage.dataset.bound = "1";
+
+    els.stage.addEventListener("pointerdown", onPointerDown);
+    els.stage.addEventListener("pointermove", onPointerMove, { passive: false });
+    els.stage.addEventListener("pointerup", onPointerUp);
+    els.stage.addEventListener("pointercancel", onPointerUp);
+    els.stage.addEventListener(
+      "wheel",
+      function (e) {
+        if (!els.lightbox || !els.lightbox.open) return;
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.12 : 0.12;
+        z.scale = Math.min(z.max, Math.max(z.min, z.scale + delta));
+        if (z.scale <= 1.02) resetZoom(true);
+        else {
+          clampPan();
+          applyZoom(false);
+          els.stage.classList.add("is-zoomed");
+        }
+      },
+      { passive: false }
+    );
+
+    // Chặn cuộn nền khi chạm lightbox
+    els.lightbox.addEventListener(
+      "touchmove",
+      function (e) {
+        if (e.target.closest && e.target.closest(".lightbox__caption")) return;
+        e.preventDefault();
+      },
+      { passive: false }
+    );
   }
 
   async function downloadPhoto(photo) {
@@ -370,21 +594,14 @@ window.LefamiTimeline = (() => {
     if (list[lightboxIndex]) downloadPhoto(list[lightboxIndex]);
   }
 
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  function lbCloseSafe() {
-    if (els.lightbox && els.lightbox.open) els.lightbox.close();
-  }
-
   function bindChrome() {
     cacheEls();
     if (els.gridSize) els.gridSize.value = String(gridCols);
+
+    // Mobile mặc định 2 cột nếu chưa chọn
+    if (window.matchMedia && window.matchMedia("(max-width: 640px)").matches) {
+      if (!localStorage.getItem("lefami_grid")) setGrid(2);
+    }
 
     var btnAlbum = document.getElementById("btn-view-album");
     var btnTimeline = document.getElementById("btn-view-timeline");
@@ -404,15 +621,26 @@ window.LefamiTimeline = (() => {
     if (lbPrev) lbPrev.addEventListener("click", function () { lightboxNav(-1); });
     if (lbNext) lbNext.addEventListener("click", function () { lightboxNav(1); });
     if (lbDl) lbDl.addEventListener("click", downloadCurrent);
+
     if (els.lightbox) {
-      els.lightbox.addEventListener("click", function (e) {
-        if (e.target === els.lightbox) lbCloseSafe();
+      els.lightbox.addEventListener("close", function () {
+        lbOpen = false;
+        unlockBody();
+        resetZoom(false);
+        pointers.clear();
+      });
+      els.lightbox.addEventListener("cancel", function () {
+        lbOpen = false;
+        unlockBody();
       });
       els.lightbox.addEventListener("keydown", function (e) {
         if (e.key === "ArrowLeft") lightboxNav(-1);
         if (e.key === "ArrowRight") lightboxNav(1);
+        if (e.key === "Escape") lbCloseSafe();
       });
     }
+
+    bindLightboxGestures();
 
     if (els.hero && "IntersectionObserver" in window) {
       var io = new IntersectionObserver(
