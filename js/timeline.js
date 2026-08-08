@@ -64,8 +64,16 @@ window.LefamiTimeline = (() => {
 
   function setPhotos(list) {
     photos = list || [];
-    render();
-    renderHero();
+    try {
+      render();
+    } catch (err) {
+      console.error("Lefami render:", err);
+    }
+    try {
+      renderHero();
+    } catch (err) {
+      console.error("Lefami hero:", err);
+    }
   }
 
   function setSort(order) {
@@ -370,6 +378,10 @@ window.LefamiTimeline = (() => {
       .replace(/"/g, "&quot;");
   }
 
+  function lbCloseSafe() {
+    if (els.lightbox && els.lightbox.open) els.lightbox.close();
+  }
+
   function bindChrome() {
     cacheEls();
     if (els.gridSize) els.gridSize.value = String(gridCols);
@@ -388,13 +400,13 @@ window.LefamiTimeline = (() => {
     var lbPrev = document.getElementById("lightbox-prev");
     var lbNext = document.getElementById("lightbox-next");
     var lbDl = document.getElementById("lightbox-download");
-    if (lbClose) lbClose.addEventListener("click", function () { els.lightbox.close(); });
+    if (lbClose) lbClose.addEventListener("click", lbCloseSafe);
     if (lbPrev) lbPrev.addEventListener("click", function () { lightboxNav(-1); });
     if (lbNext) lbNext.addEventListener("click", function () { lightboxNav(1); });
     if (lbDl) lbDl.addEventListener("click", downloadCurrent);
     if (els.lightbox) {
       els.lightbox.addEventListener("click", function (e) {
-        if (e.target === els.lightbox) els.lightbox.close();
+        if (e.target === els.lightbox) lbCloseSafe();
       });
       els.lightbox.addEventListener("keydown", function (e) {
         if (e.key === "ArrowLeft") lightboxNav(-1);

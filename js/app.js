@@ -58,6 +58,7 @@
 
   function renderFamilies() {
     const list = $("families-list");
+    if (!list) return;
     list.innerHTML = state.families
       .map(
         (f) => `
@@ -78,12 +79,14 @@
       });
     });
 
-    LefamiUpload.fillFamilies(
-      state.families,
-      state.activeFamilyId === "all"
-        ? state.families.find((f) => f.id !== "all")?.id
-        : state.activeFamilyId
-    );
+    if (window.LefamiUpload) {
+      LefamiUpload.fillFamilies(
+        state.families,
+        state.activeFamilyId === "all"
+          ? state.families.find((f) => f.id !== "all")?.id
+          : state.activeFamilyId
+      );
+    }
   }
 
   function escapeHtml(s) {
@@ -109,7 +112,13 @@
       LefamiTimeline.setPhotos(photos);
     } catch (err) {
       console.error(err);
-      alert("Không tải được ảnh: " + (err.message || err));
+      const msg = String(err && err.message ? err.message : err);
+      // Lỗi DOM thường do trình duyệt giữ file JS cũ — không làm phiền bằng alert kỹ thuật
+      if (/innerHTML|null is not|Cannot set properties of null/i.test(msg)) {
+        console.warn("Giao diện lệch phiên bản. Hãy Ctrl+F5 để tải lại.");
+        return;
+      }
+      alert("Không tải được ảnh: " + msg);
     }
   }
 
