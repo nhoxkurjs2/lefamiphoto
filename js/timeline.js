@@ -377,26 +377,34 @@ window.LefamiTimeline = (() => {
 
     els.heroMedia.innerHTML = list
       .map(function (p, i) {
+        var src = view(p);
+        var lazy = i ? ' loading="lazy"' : "";
         return (
           '<div class="hero__slide' +
           (i === 0 ? " is-active" : "") +
-          '"><img src="' +
-          view(p) +
-          '" alt="" decoding="async" ' +
-          (i ? 'loading="lazy"' : "") +
+          '"><img class="hero__blur" src="' +
+          src +
+          '" alt="" aria-hidden="true" decoding="async"' +
+          lazy +
+          ' /><div class="hero__wash"></div><img class="hero__photo" src="' +
+          src +
+          '" alt="" decoding="async"' +
+          lazy +
           " /></div>"
         );
       })
       .join("");
 
-    els.heroMedia.querySelectorAll("img").forEach(function (img, i) {
-      img.addEventListener(
-        "error",
-        function () {
-          recoverImage(img, list[i]);
-        },
-        { once: true }
-      );
+    els.heroMedia.querySelectorAll(".hero__slide").forEach(function (slide, i) {
+      slide.querySelectorAll("img").forEach(function (img) {
+        img.addEventListener(
+          "error",
+          function () {
+            recoverImage(img, list[i]);
+          },
+          { once: true }
+        );
+      });
     });
 
     let index = 0;
