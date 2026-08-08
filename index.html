@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Lefami — kho kỷ niệm đại gia đình. Chia sẻ, lưu trữ và xem lại những khoảnh khắc đẹp." />
+  <title>Lefami — Kỷ niệm đại gia đình</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%232c3d32' width='64' height='64' rx='12'/%3E%3Cpath fill='%23d4a574' d='M18 40l10-14 8 10 6-8 10 12H18z'/%3E%3Ccircle fill='%23e8d5b7' cx='24' cy='22' r='4'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- Auth gate -->
+  <section id="auth-gate" class="auth-gate hidden">
+    <div class="auth-gate__inner">
+      <p class="brand-mark">Lefami</p>
+      <h1>Kỷ niệm đại gia đình</h1>
+      <p class="auth-gate__lead">Đăng nhập bằng Google để xem và chia sẻ ảnh. Mọi hình ảnh được lưu an toàn trên Google Drive của gia đình.</p>
+      <button type="button" id="btn-signin" class="btn btn--primary">Đăng nhập với Google</button>
+      <p id="auth-error" class="auth-error hidden"></p>
+      <p class="auth-gate__hint">Chỉ thành viên được chia sẻ thư mục Drive mới truy cập được.</p>
+    </div>
+  </section>
+
+  <!-- Demo banner -->
+  <div id="demo-banner" class="demo-banner hidden" role="status">
+    <span>Đang chạy chế độ Demo — ảnh lưu trên trình duyệt. Cấu hình Google Drive trong <code>js/config.js</code> để lưu thật.</span>
+    <button type="button" id="btn-dismiss-demo" class="btn-text" aria-label="Đóng">×</button>
+  </div>
+
+  <header class="site-header">
+    <a href="#top" class="logo" id="logo">Lefami</a>
+    <nav class="header-nav" aria-label="Chính">
+      <button type="button" class="btn-text" id="btn-play" title="Phát kỷ niệm">Phát</button>
+      <button type="button" class="btn btn--ghost" id="btn-upload">Thêm ảnh</button>
+      <button type="button" class="btn btn--ghost hidden" id="btn-signin-header">Đăng nhập</button>
+      <div id="user-chip" class="user-chip hidden">
+        <img id="user-avatar" alt="" width="28" height="28" />
+        <span id="user-name"></span>
+        <button type="button" class="btn-text" id="btn-signout" title="Đăng xuất">Thoát</button>
+      </div>
+    </nav>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero" aria-label="Giới thiệu">
+      <div class="hero__media" id="hero-media">
+        <div class="hero__slide is-active" data-fallback="true">
+          <div class="hero__fallback"></div>
+        </div>
+      </div>
+      <div class="hero__veil"></div>
+      <div class="hero__content">
+        <p class="brand-mark brand-mark--hero">Lefami</p>
+        <h1 class="hero__title">Kỷ niệm đại gia đình</h1>
+        <p class="hero__sub">Nơi cả nhà lưu giữ và xem lại những khoảnh khắc đáng nhớ — theo từng nhánh gia đình, theo dòng thời gian.</p>
+        <div class="hero__actions">
+          <button type="button" class="btn btn--primary" id="btn-scroll-timeline">Xem dòng thời gian</button>
+          <button type="button" class="btn btn--light" id="btn-upload-hero">Tải ảnh lên</button>
+        </div>
+      </div>
+      <div class="hero__progress" id="hero-progress" aria-hidden="true"></div>
+    </section>
+
+    <!-- Families -->
+    <section class="families" aria-label="Gia đình">
+      <div class="section-head">
+        <h2>Gia đình</h2>
+        <p>Chọn nhánh để xem, hoặc tạo thư mục mới cho gia đình nhỏ.</p>
+      </div>
+      <div class="families__row">
+        <div class="families__list" id="families-list" role="tablist"></div>
+        <button type="button" class="btn btn--ghost" id="btn-new-family">+ Tạo gia đình</button>
+      </div>
+    </section>
+
+    <!-- Timeline -->
+    <section class="timeline-section" id="timeline" aria-label="Dòng thời gian">
+      <div class="section-head section-head--center">
+        <h2>Dòng thời gian</h2>
+        <p id="timeline-subtitle">Tất cả kỷ niệm, sắp xếp theo ngày chụp.</p>
+      </div>
+      <div class="timeline-toolbar">
+        <label class="sr-only" for="sort-order">Sắp xếp</label>
+        <select id="sort-order" class="select">
+          <option value="desc">Mới nhất trước</option>
+          <option value="asc">Cũ nhất trước</option>
+        </select>
+        <span class="photo-count" id="photo-count">0 ảnh</span>
+      </div>
+      <div id="timeline-empty" class="timeline-empty hidden">
+        <p>Chưa có ảnh nào trong nhánh này.</p>
+        <button type="button" class="btn btn--primary" id="btn-upload-empty">Thêm ảnh đầu tiên</button>
+      </div>
+      <div class="timeline" id="timeline-root"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p><span class="brand-mark brand-mark--footer">Lefami</span> — lưu trữ trên Google Drive</p>
+  </footer>
+
+  <!-- Upload modal -->
+  <dialog class="modal" id="upload-modal" aria-labelledby="upload-title">
+    <form method="dialog" class="modal__panel" id="upload-form">
+      <header class="modal__head">
+        <h2 id="upload-title">Thêm kỷ niệm</h2>
+        <button type="submit" class="btn-icon" value="cancel" aria-label="Đóng">×</button>
+      </header>
+      <div class="modal__body">
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="file-input" accept="image/*" multiple hidden />
+          <p class="dropzone__title">Kéo thả ảnh vào đây</p>
+          <p class="dropzone__hint">Hoặc nhấn để chọn — có thể chọn nhiều ảnh cùng lúc</p>
+          <button type="button" class="btn btn--ghost" id="btn-pick-files">Chọn ảnh</button>
+        </div>
+        <div id="upload-queue" class="upload-queue hidden"></div>
+        <div class="form-grid">
+          <label class="field">
+            <span>Gia đình</span>
+            <select id="upload-family" class="select" required></select>
+          </label>
+          <label class="field">
+            <span>Thời gian (áp dụng ảnh chưa có ngày EXIF)</span>
+            <input type="datetime-local" id="upload-datetime" class="input" />
+          </label>
+          <label class="field field--full">
+            <span>Ghi chú chung (tuỳ chọn)</span>
+            <textarea id="upload-note" class="input" rows="2" placeholder="Ví dụ: Tết 2024 tại nhà ông bà..."></textarea>
+          </label>
+        </div>
+        <p id="upload-status" class="upload-status" aria-live="polite"></p>
+      </div>
+      <footer class="modal__foot">
+        <button type="submit" class="btn btn--ghost" value="cancel">Huỷ</button>
+        <button type="button" class="btn btn--primary" id="btn-start-upload" disabled>Tải lên</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- New family modal -->
+  <dialog class="modal" id="family-modal" aria-labelledby="family-title">
+    <form method="dialog" class="modal__panel modal__panel--sm" id="family-form">
+      <header class="modal__head">
+        <h2 id="family-title">Tạo gia đình mới</h2>
+        <button type="submit" class="btn-icon" value="cancel" aria-label="Đóng">×</button>
+      </header>
+      <div class="modal__body">
+        <label class="field">
+          <span>Tên gia đình / nhánh</span>
+          <input type="text" id="family-name" class="input" placeholder="Ví dụ: Nhà bác Minh" required maxlength="80" />
+        </label>
+      </div>
+      <footer class="modal__foot">
+        <button type="submit" class="btn btn--ghost" value="cancel">Huỷ</button>
+        <button type="button" class="btn btn--primary" id="btn-create-family">Tạo</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Lightbox -->
+  <dialog class="lightbox" id="lightbox" aria-label="Xem ảnh">
+    <button type="button" class="lightbox__close btn-icon" id="lightbox-close" aria-label="Đóng">×</button>
+    <button type="button" class="lightbox__nav lightbox__nav--prev" id="lightbox-prev" aria-label="Ảnh trước">‹</button>
+    <figure class="lightbox__figure">
+      <img id="lightbox-img" alt="" />
+      <figcaption id="lightbox-caption"></figcaption>
+    </figure>
+    <button type="button" class="lightbox__nav lightbox__nav--next" id="lightbox-next" aria-label="Ảnh sau">›</button>
+  </dialog>
+
+  <!-- Memory theater (play mode) -->
+  <div id="theater" class="theater hidden" aria-hidden="true">
+    <img id="theater-img" alt="" />
+    <div class="theater__meta">
+      <p class="brand-mark">Lefami</p>
+      <p id="theater-caption"></p>
+      <p id="theater-date"></p>
+    </div>
+    <button type="button" class="btn btn--light theater__exit" id="theater-exit">Thoát</button>
+    <div class="theater__bar"><div id="theater-bar"></div></div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+  <script src="js/exif.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/drive.js"></script>
+  <script src="js/demo.js"></script>
+  <script src="js/timeline.js"></script>
+  <script src="js/upload.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
