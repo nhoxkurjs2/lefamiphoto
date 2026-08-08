@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/main.css?v=4" />
+  <link rel="stylesheet" href="css/main.css?v=5" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%232c3d32' width='64' height='64' rx='12'/%3E%3Cpath fill='%23d4a574' d='M18 40l10-14 8 10 6-8 10 12H18z'/%3E%3Ccircle fill='%23e8d5b7' cx='24' cy='22' r='4'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -46,7 +46,7 @@
       <div class="hero__intro">
         <p class="brand-mark brand-mark--hero">Lefami</p>
         <h1 class="hero__title">Kỷ niệm đại gia đình</h1>
-        <p class="hero__sub">Lưu giữ và xem lại khoảnh khắc đáng nhớ theo từng nhánh gia đình.</p>
+        <p class="hero__sub">Lưu giữ và xem lại khoảnh khắc đáng nhớ của Đại Gia Đình.</p>
         <button type="button" class="btn btn--primary" id="btn-scroll-gallery">Xem album</button>
       </div>
       <div class="hero__strip" id="hero-strip" aria-label="Ảnh gần đây">
@@ -59,7 +59,6 @@
     <section class="families" aria-label="Gia đình">
       <div class="section-head">
         <h2>Gia đình</h2>
-        <p>Chọn nhánh để xem, hoặc tạo thư mục mới.</p>
       </div>
       <div class="families__row">
         <div class="families__list" id="families-list" role="tablist"></div>
@@ -171,32 +170,36 @@
   </dialog>
 
   <dialog class="lightbox" id="lightbox" aria-label="Xem ảnh">
-    <div class="lightbox__top">
+    <header class="lightbox__top">
       <span class="lightbox__counter" id="lightbox-counter"></span>
       <div class="lightbox__top-actions">
         <button type="button" class="btn btn--light btn--sm" id="lightbox-download">Tải về</button>
         <button type="button" class="lightbox__close btn-icon" id="lightbox-close" aria-label="Đóng">×</button>
       </div>
+    </header>
+    <div class="lightbox__body">
+      <button type="button" class="lightbox__nav lightbox__nav--prev" id="lightbox-prev" aria-label="Ảnh trước">‹</button>
+      <div class="lightbox__stage" id="lightbox-stage">
+        <img id="lightbox-img" alt="" decoding="async" draggable="false" />
+      </div>
+      <button type="button" class="lightbox__nav lightbox__nav--next" id="lightbox-next" aria-label="Ảnh sau">›</button>
     </div>
-    <button type="button" class="lightbox__nav lightbox__nav--prev" id="lightbox-prev" aria-label="Ảnh trước">‹</button>
-    <div class="lightbox__stage" id="lightbox-stage">
-      <img id="lightbox-img" alt="" decoding="async" draggable="false" />
-    </div>
-    <p class="lightbox__caption" id="lightbox-caption"></p>
-    <p class="lightbox__hint">Vuốt để đổi ảnh · Chạm 2 lần / chụm để zoom</p>
-    <button type="button" class="lightbox__nav lightbox__nav--next" id="lightbox-next" aria-label="Ảnh sau">›</button>
+    <footer class="lightbox__foot">
+      <p class="lightbox__caption" id="lightbox-caption"></p>
+      <p class="lightbox__hint">Vuốt để đổi ảnh · Chạm 2 lần để zoom / bỏ zoom</p>
+    </footer>
   </dialog>
 
-  <script src="js/config.js?v=4"></script>
+  <script src="js/config.js?v=5"></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/lite.umd.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
-  <script src="js/exif.js?v=4"></script>
-  <script src="js/storage.js?v=4"></script>
-  <script src="js/drive.js?v=4"></script>
-  <script src="js/demo.js?v=4"></script>
-  <script src="js/timeline.js?v=4"></script>
-  <script src="js/upload.js?v=4"></script>
-  <script src="js/app.js?v=4"></script>
+  <script src="js/exif.js?v=5"></script>
+  <script src="js/storage.js?v=5"></script>
+  <script src="js/drive.js?v=5"></script>
+  <script src="js/demo.js?v=5"></script>
+  <script src="js/timeline.js?v=5"></script>
+  <script src="js/upload.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
 </body>
 </html>

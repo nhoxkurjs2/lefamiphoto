@@ -420,7 +420,7 @@ window.LefamiTimeline = (() => {
 
   function onPointerDown(e) {
     if (!els.stage || !els.lightbox || !els.lightbox.open) return;
-    if (e.target.closest && e.target.closest(".lightbox__top, .lightbox__nav, .lightbox__caption"))
+    if (e.target.closest && e.target.closest(".lightbox__top, .lightbox__nav, .lightbox__foot, .lightbox__caption"))
       return;
     els.stage.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -432,11 +432,11 @@ window.LefamiTimeline = (() => {
       panStart = null;
       swipeStart = null;
     } else if (pointers.size === 1) {
+      // Luôn ghi nhận điểm chạm để double-tap zoom in/out
+      swipeStart = { x: e.clientX, y: e.clientY, t: Date.now() };
       if (z.scale > 1.05) {
         panStart = { x: e.clientX, y: e.clientY, ox: z.x, oy: z.y };
-        swipeStart = null;
       } else {
-        swipeStart = { x: e.clientX, y: e.clientY, t: Date.now() };
         panStart = null;
       }
     }
@@ -463,12 +463,17 @@ window.LefamiTimeline = (() => {
       z.y = panStart.oy + (e.clientY - panStart.y);
       clampPan();
       applyZoom(false);
+      // Nếu kéo xa thì không tính double-tap
+      if (swipeStart) {
+        const mdx = e.clientX - swipeStart.x;
+        const mdy = e.clientY - swipeStart.y;
+        if (Math.abs(mdx) > 12 || Math.abs(mdy) > 12) swipeStart.moved = true;
+      }
     }
   }
 
   function onPointerUp(e) {
     if (!pointers.has(e.pointerId)) return;
-    const wasSwipe = swipeStart && pointers.size === 1 && z.scale <= 1.05;
     const start = swipeStart;
     pointers.delete(e.pointerId);
 
@@ -477,23 +482,29 @@ window.LefamiTimeline = (() => {
     }
     if (pointers.size === 0) {
       panStart = null;
-
-      // Double tap zoom
       const now = Date.now();
-      if (wasSwipe && start) {
+
+      if (start && !start.moved) {
         const dx = e.clientX - start.x;
         const dy = e.clientY - start.y;
         const dt = now - start.t;
-        if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.2 && dt < 450) {
-          lightboxNav(dx < 0 ? 1 : -1);
-          swipeStart = null;
-          return;
+        const isTap = Math.abs(dx) < 12 && Math.abs(dy) < 12 && dt < 350;
+
+        // Vuốt ngang chỉ khi chưa zoom
+        if (!isTap && z.scale <= 1.05) {
+          if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.2 && dt < 450) {
+            lightboxNav(dx < 0 ? 1 : -1);
+            swipeStart = null;
+            return;
+          }
         }
-        // tap
-        if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && dt < 300) {
-          if (now - lastTap < 320) {
-            if (z.scale > 1.05) resetZoom(true);
-            else {
+
+        // Double-tap: zoom in <-> zoom out
+        if (isTap) {
+          if (now - lastTap < 340) {
+            if (z.scale > 1.05) {
+              resetZoom(true);
+            } else {
               z.scale = 2.2;
               z.x = 0;
               z.y = 0;
@@ -506,6 +517,7 @@ window.LefamiTimeline = (() => {
           }
         }
       }
+
       swipeStart = null;
       if (z.scale <= 1.02) resetZoom(true);
       else {
