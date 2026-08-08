@@ -126,7 +126,8 @@
     try {
       const familyId =
         LefamiTimeline.getPageMode() === "manage" ? "all" : state.activeFamilyId;
-      const photos = await LefamiStorage.listPhotos(familyId, state.families);
+      // Không dùng cache families cũ sau đăng nhập lại
+      const photos = await LefamiStorage.listPhotos(familyId, null);
       LefamiTimeline.setPhotos(photos);
     } catch (err) {
       console.error(err);
@@ -141,7 +142,7 @@
 
   async function refreshPhotosForManage() {
     try {
-      const photos = await LefamiStorage.listPhotos("all", state.families);
+      const photos = await LefamiStorage.listPhotos("all", null);
       LefamiTimeline.setPhotos(photos);
     } catch (err) {
       console.error(err);
@@ -177,6 +178,7 @@
   async function handleSignOut() {
     await LefamiStorage.signOut();
     if (LefamiStorage.mode === "drive") {
+      state.activeFamilyId = "all";
       goHome();
       show($("auth-gate"), true);
       LefamiTimeline.setPhotos([]);

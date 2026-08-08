@@ -1,7 +1,6 @@
 /**
  * Google Drive backend
  * Cấu trúc: ROOT / [Tên gia đình] / ảnh...
- * Metadata ảnh: description = ghi chú, appProperties = family, takenAt, uploadedBy
  */
 window.LefamiDrive = (() => {
   const DISCOVERY = "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
@@ -64,9 +63,34 @@ window.LefamiDrive = (() => {
   function setToken(tokenResponse) {
     accessToken = tokenResponse.access_token;
     const expiresIn = Number(tokenResponse.expires_in || 3600);
-    // hết hạn sớm 60s để kịp refresh
     tokenExpiresAt = Date.now() + Math.max(60, expiresIn - 60) * 1000;
     gapi.client.setToken({ access_token: accessToken });
+  }
+
+  /** Tham số cần có để thấy file trong thư mục được share */
+  function driveListParams(extra) {
+    return Object.assign(
+      {
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        spaces: "drive",
+        pageSize: 200,
+      },
+      extra || {}
+    );
+  }
+
+  async function listAllPages(params) {
+    const files = [];
+    let pageToken = null;
+    do {
+      const res = await gapi.client.drive.files.list(
+        driveListParams(Object.assign({}, params, pageToken ? { pageToken } : {}))
+      );
+      files.push.apply(files, res.result.files || []);
+      pageToken = res.result.nextPageToken || null;
+    } while (pageToken);
+    return files;
   }
 
   async function fetchUser() {
@@ -100,7 +124,6 @@ window.LefamiDrive = (() => {
     });
   }
 
-  /** Khôi phục phiên sau reload (không hiện popup nếu token còn hạn) */
   async function tryRestore() {
     const saved = loadSession();
     if (!saved?.accessToken || !saved?.user) return false;
@@ -110,17 +133,28 @@ window.LefamiDrive = (() => {
       tokenExpiresAt = saved.expiresAt;
       user = saved.user;
       gapi.client.setToken({ access_token: accessToken });
-      return true;
+      // Kiểm tra token còn dùng được không
+      try {
+        await gapi.client.drive.files.get({
+          fileId: cfg().ROOT_FOLDER_ID,
+          fields: "id",
+          supportsAllDrives: true,
+        });
+        return true;
+      } catch (_) {
+        // Token chết → xin lại
+      }
     }
 
-    // Token hết hạn → xin lại im lặng (không consent lại)
     try {
+      user = saved.user;
       await silentRefresh();
       return Boolean(accessToken && user);
     } catch (_) {
       clearSession();
       accessToken = null;
       user = null;
+      tokenExpiresAt = 0;
       return false;
     }
   }
@@ -169,22 +203,18 @@ window.LefamiDrive = (() => {
           reject(e);
         }
       };
-      // Đã từng đăng nhập → không bắt consent lại
-      const saved = loadSession();
-      tokenClient.requestAccessToken({ prompt: saved ? "" : "consent" });
+      // select_account: cho chọn lại tài khoản sau khi đăng xuất, vẫn giữ quyền đã cấp
+      tokenClient.requestAccessToken({ prompt: "select_account" });
     });
   }
 
   async function signOut() {
-    if (accessToken) {
-      try {
-        google.accounts.oauth2.revoke(accessToken, () => {});
-      } catch (_) {}
-      gapi.client.setToken(null);
-      accessToken = null;
-      user = null;
-      tokenExpiresAt = 0;
-    }
+    // Không revoke trên Google (revoke dễ làm lần đăng nhập sau mất quyền / list rỗng).
+    // Chỉ xóa phiên trên trình duyệt.
+    gapi.client.setToken(null);
+    accessToken = null;
+    user = null;
+    tokenExpiresAt = 0;
     clearSession();
   }
 
@@ -197,22 +227,42 @@ window.LefamiDrive = (() => {
   }
 
   async function ensureToken() {
-    if (accessToken && Date.now() < tokenExpiresAt) return;
+    if (accessToken && Date.now() < tokenExpiresAt) {
+      gapi.client.setToken({ access_token: accessToken });
+      return;
+    }
+    if (!tokenClient) throw new Error("Google chưa sẵn sàng");
     await silentRefresh();
   }
 
   async function listFamilies() {
     await ensureToken();
     const root = cfg().ROOT_FOLDER_ID;
-    const q = `'${root}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
-    const res = await gapi.client.drive.files.list({
-      q,
-      fields: "files(id, name, createdTime)",
-      orderBy: "name",
-      pageSize: 100,
-      spaces: "drive",
-    });
-    const files = res.result.files || [];
+    if (!root || String(root).includes("YOUR_")) {
+      throw new Error("Chưa cấu hình ROOT_FOLDER_ID trong config.js");
+    }
+
+    const q =
+      "'" +
+      root +
+      "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+
+    let files = [];
+    try {
+      files = await listAllPages({
+        q,
+        fields: "nextPageToken, files(id, name, createdTime)",
+        orderBy: "name",
+      });
+    } catch (err) {
+      // Một số thư mục share không hỗ trợ orderBy
+      console.warn("listFamilies orderBy failed, retry", err);
+      files = await listAllPages({
+        q,
+        fields: "nextPageToken, files(id, name, createdTime)",
+      });
+    }
+
     return [{ id: "all", name: "Tất cả" }, ...files.map((f) => ({ id: f.id, name: f.name }))];
   }
 
@@ -227,6 +277,7 @@ window.LefamiDrive = (() => {
         parents: [cfg().ROOT_FOLDER_ID],
       },
       fields: "id, name",
+      supportsAllDrives: true,
     });
     return { id: res.result.id, name: res.result.name };
   }
@@ -250,34 +301,61 @@ window.LefamiDrive = (() => {
   }
 
   async function listFolderPhotos(folderId, familyName) {
-    const q = `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`;
-    const res = await gapi.client.drive.files.list({
-      q,
-      fields:
-        "files(id, name, description, createdTime, mimeType, thumbnailLink, appProperties, parents)",
-      pageSize: 100,
-      orderBy: "createdTime desc",
-    });
-    return (res.result.files || []).map((f) => parsePhoto(f, familyName));
+    const q =
+      "'" + folderId + "' in parents and mimeType contains 'image/' and trashed = false";
+    let files = [];
+    try {
+      files = await listAllPages({
+        q,
+        fields:
+          "nextPageToken, files(id, name, description, createdTime, mimeType, thumbnailLink, appProperties, parents)",
+        orderBy: "createdTime desc",
+      });
+    } catch (err) {
+      console.warn("listFolderPhotos orderBy failed, retry", err);
+      files = await listAllPages({
+        q,
+        fields:
+          "nextPageToken, files(id, name, description, createdTime, mimeType, thumbnailLink, appProperties, parents)",
+      });
+    }
+    return files.map((f) => parsePhoto(f, familyName));
   }
 
   async function listPhotos(familyId, familiesCache) {
     await ensureToken();
+
     if (familyId && familyId !== "all") {
       const fam = (familiesCache || []).find((f) => f.id === familyId);
       return listFolderPhotos(familyId, fam?.name);
     }
 
-    const families = familiesCache || (await listFamilies());
+    // Luôn lấy lại danh sách thư mục mới (tránh cache cũ sau đăng nhập lại)
+    const families = await listFamilies();
     const real = families.filter((f) => f.id !== "all");
-    // Giới hạn song song để tránh lag / rate limit
     const out = [];
+
     for (let i = 0; i < real.length; i += 3) {
       const chunk = real.slice(i, i + 3);
       const batch = await Promise.all(chunk.map((f) => listFolderPhotos(f.id, f.name)));
       out.push(...batch.flat());
     }
-    return out;
+
+    // Ảnh nằm thẳng trong thư mục gốc (nếu có)
+    try {
+      const rootPhotos = await listFolderPhotos(cfg().ROOT_FOLDER_ID, "Gốc");
+      out.push(...rootPhotos);
+    } catch (err) {
+      console.warn("list root photos", err);
+    }
+
+    // Gỡ trùng id
+    const seen = new Set();
+    return out.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
   }
 
   async function uploadPhoto({ file, familyId, familyName, note, takenAt }, onProgress) {
@@ -321,7 +399,7 @@ window.LefamiDrive = (() => {
     if (onProgress) onProgress(0.3);
 
     const res = await fetch(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,description,createdTime,mimeType,thumbnailLink,appProperties,parents",
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,description,createdTime,mimeType,thumbnailLink,appProperties,parents",
       {
         method: "POST",
         headers: {
@@ -359,7 +437,9 @@ window.LefamiDrive = (() => {
   async function fetchBlobUrl(fileId) {
     await ensureToken();
     const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      "https://www.googleapis.com/drive/v3/files/" +
+        encodeURIComponent(fileId) +
+        "?alt=media&supportsAllDrives=true",
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     if (!res.ok) throw new Error("Không tải được ảnh từ Drive");
@@ -384,7 +464,10 @@ window.LefamiDrive = (() => {
     async deletePhoto(fileId) {
       await ensureToken();
       if (!fileId) throw new Error("Thiếu id ảnh");
-      await gapi.client.drive.files.delete({ fileId });
+      await gapi.client.drive.files.delete({
+        fileId,
+        supportsAllDrives: true,
+      });
       return true;
     },
     get gapiReady() {
