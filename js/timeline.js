@@ -39,8 +39,7 @@ window.LefamiTimeline = (() => {
       document.getElementById("gallery-empty") ||
       document.getElementById("timeline-empty");
     els.count = document.getElementById("photo-count");
-    els.heroTrack = document.getElementById("hero-track");
-    els.heroStrip = document.getElementById("hero-strip");
+    els.heroMedia = document.getElementById("hero-media");
     els.hero = document.querySelector(".hero");
     els.lightbox = document.getElementById("lightbox");
     els.stage = document.getElementById("lightbox-stage");
@@ -363,47 +362,54 @@ window.LefamiTimeline = (() => {
     }
   }
 
+  /** Hero: ảnh lớn full khung, tĩnh (không zoom), đổi mỗi 3 giây */
   function renderHero() {
     cacheEls();
     stopHero();
-    if (!els.heroTrack || !els.heroStrip) return;
+    if (!els.heroMedia) return;
 
     const list = sorted().slice(0, 10);
     if (!list.length) {
-      els.heroTrack.innerHTML =
-        '<div class="hero__fallback-slide">Chưa có ảnh</div>';
-      els.heroTrack.style.transform = "translateX(0)";
+      els.heroMedia.innerHTML =
+        '<div class="hero__slide is-active"><div class="hero__fallback"></div></div>';
       return;
     }
 
-    const loop = list.concat(list);
-    els.heroTrack.innerHTML = loop
-      .map(function (p) {
+    els.heroMedia.innerHTML = list
+      .map(function (p, i) {
         return (
-          '<figure class="hero__frame"><img src="' +
+          '<div class="hero__slide' +
+          (i === 0 ? " is-active" : "") +
+          '"><img src="' +
           view(p) +
-          '" alt="" decoding="async" loading="lazy" /></figure>'
+          '" alt="" decoding="async" ' +
+          (i ? 'loading="lazy"' : "") +
+          " /></div>"
         );
       })
       .join("");
 
-    els.heroTrack.querySelectorAll("img").forEach(function (img, i) {
-      img.addEventListener("error", function () {
-        recoverImage(img, loop[i]);
-      }, { once: true });
+    els.heroMedia.querySelectorAll("img").forEach(function (img, i) {
+      img.addEventListener(
+        "error",
+        function () {
+          recoverImage(img, list[i]);
+        },
+        { once: true }
+      );
     });
 
-    let offset = 0;
-    const speed = 0.4;
+    let index = 0;
     heroTimer = setInterval(function () {
-      if (lbOpen || !heroVisible || !els.heroTrack) return;
+      if (lbOpen || !heroVisible || !els.heroMedia) return;
       if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
         return;
-      offset += speed;
-      const half = els.heroTrack.scrollWidth / 2;
-      if (half > 0 && offset >= half) offset = 0;
-      els.heroTrack.style.transform = "translate3d(" + -offset + "px,0,0)";
-    }, 40);
+      const slides = els.heroMedia.querySelectorAll(".hero__slide");
+      if (slides.length < 2) return;
+      slides[index].classList.remove("is-active");
+      index = (index + 1) % slides.length;
+      slides[index].classList.add("is-active");
+    }, 3000);
   }
 
   /* ========== Lightbox ========== */
