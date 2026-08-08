@@ -6,7 +6,7 @@ window.LefamiTimeline = (() => {
   let sortOrder = "desc";
   let viewMode = localStorage.getItem("lefami_view") || "album";
   let gridCols = Number(localStorage.getItem("lefami_grid") || 3);
-  let mineOnly = false;
+  let pageMode = "home"; // home | manage
   let lightboxIndex = 0;
   let onPhotosChanged = null;
   let heroTimer = null;
@@ -51,16 +51,22 @@ window.LefamiTimeline = (() => {
   }
 
   function sorted() {
-    let list = photos.slice();
-    if (mineOnly) {
-      list = list.filter(isMine);
-    }
+    const list = photos.slice();
     list.sort((a, b) => {
       const ta = new Date(a.takenAt || a.createdTime || 0).getTime();
       const tb = new Date(b.takenAt || b.createdTime || 0).getTime();
       return sortOrder === "asc" ? ta - tb : tb - ta;
     });
     return list;
+  }
+
+  function myPhotos() {
+    return sorted().filter(isMine);
+  }
+
+  /** Danh sách đang dùng cho lightbox (album hoặc trang quản lý) */
+  function activeList() {
+    return pageMode === "manage" ? myPhotos() : sorted();
   }
 
   function isMine(photo) {
@@ -72,12 +78,22 @@ window.LefamiTimeline = (() => {
     );
   }
 
-  function setMineOnly(on) {
-    mineOnly = !!on;
+  function setPageMode(mode) {
+    pageMode = mode === "manage" ? "manage" : "home";
+    const home = document.getElementById("page-home");
+    const manage = document.getElementById("page-manage");
     const btn = document.getElementById("btn-my-photos");
-    if (btn) btn.classList.toggle("is-active-mine", mineOnly);
-    render();
-    renderHero();
+    if (home) home.classList.toggle("hidden", pageMode === "manage");
+    if (manage) manage.classList.toggle("hidden", pageMode !== "manage");
+    if (btn) btn.classList.toggle("is-active-mine", pageMode === "manage");
+    document.body.classList.toggle("page-manage-on", pageMode === "manage");
+    if (pageMode === "manage") {
+      renderManage();
+      window.scrollTo(0, 0);
+    } else {
+      render();
+      renderHero();
+    }
   }
 
   function thumb(photo) {
@@ -105,12 +121,13 @@ window.LefamiTimeline = (() => {
   function setPhotos(list) {
     photos = list || [];
     try {
-      render();
+      if (pageMode === "manage") renderManage();
+      else render();
     } catch (err) {
       console.error("Lefami render:", err);
     }
     try {
-      renderHero();
+      if (pageMode === "home") renderHero();
     } catch (err) {
       console.error("Lefami hero:", err);
     }
@@ -178,6 +195,66 @@ window.LefamiTimeline = (() => {
     else renderTimeline(list);
   }
 
+  function renderManage() {
+    const root = document.getElementById("manage-root");
+    const empty = document.getElementById("manage-empty");
+    const count = document.getElementById("manage-count");
+    if (!root) return;
+
+    const list = myPhotos();
+    if (count) count.textContent = list.length + " ảnh";
+
+    if (!list.length) {
+      root.innerHTML = "";
+      if (empty) empty.classList.remove("hidden");
+      return;
+    }
+    if (empty) empty.classList.add("hidden");
+
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < list.length; i++) {
+      const photo = list[i];
+      const row = document.createElement("article");
+      row.className = "manage-item";
+      row.innerHTML =
+        '<button type="button" class="manage-item__thumb" data-open="1">' +
+        '<img src="' +
+        thumb(photo) +
+        '" alt="" loading="lazy" decoding="async" /></button>' +
+        '<div class="manage-item__info">' +
+        '<p class="manage-item__date">' +
+        LefamiExif.formatDisplay(photo.takenAt || photo.createdTime) +
+        "</p>" +
+        '<p class="manage-item__meta">' +
+        escapeHtml(
+          [photo.familyName, photo.note || photo.name].filter(Boolean).join(" · ")
+        ) +
+        "</p></div>" +
+        '<div class="manage-item__actions">' +
+        '<button type="button" class="btn btn--ghost btn--sm" data-open="1">Xem</button>' +
+        '<button type="button" class="btn btn--danger btn--sm" data-del="1">Xóa</button>' +
+        "</div>";
+
+      const img = row.querySelector("img");
+      if (img) {
+        img.addEventListener("error", function () {
+          recoverImage(img, photo);
+        }, { once: true });
+      }
+      row.querySelectorAll("[data-open]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          openLightbox(photo.id);
+        });
+      });
+      row.querySelector("[data-del]").addEventListener("click", function () {
+        deletePhoto(photo);
+      });
+      frag.appendChild(row);
+    }
+    root.innerHTML = "";
+    root.appendChild(frag);
+  }
+
   function renderAlbum(list) {
     if (!els.album) return;
     const frag = document.createDocumentFragment();
@@ -198,9 +275,6 @@ window.LefamiTimeline = (() => {
           ? '<span class="album-cell__fam">' + escapeHtml(photo.familyName) + "</span>"
           : "") +
         "</span>" +
-        (isMine(photo)
-          ? '<span class="album-cell__del" data-del="1" title="Xóa ảnh của tôi">🗑</span>'
-          : "") +
         '<span class="album-cell__dl" data-dl="1" title="Tải về">↓</span>';
       const img = cell.querySelector("img");
       if (img) {
@@ -209,11 +283,6 @@ window.LefamiTimeline = (() => {
         }, { once: true });
       }
       cell.addEventListener("click", function (e) {
-        if (e.target.closest && e.target.closest("[data-del]")) {
-          e.stopPropagation();
-          deletePhoto(photo);
-          return;
-        }
         if (e.target.closest && e.target.closest("[data-dl]")) {
           e.stopPropagation();
           downloadPhoto(photo);
@@ -389,7 +458,7 @@ window.LefamiTimeline = (() => {
 
   function openLightbox(id) {
     cacheEls();
-    const list = sorted();
+    const list = activeList();
     lightboxIndex = Math.max(
       0,
       list.findIndex(function (p) {
@@ -405,7 +474,7 @@ window.LefamiTimeline = (() => {
   }
 
   function showLightbox(keepZoom) {
-    const list = sorted();
+    const list = activeList();
     if (!list.length || !els.lightboxImg) return;
     const photo = list[lightboxIndex];
     if (!keepZoom) resetZoom(false);
@@ -442,7 +511,7 @@ window.LefamiTimeline = (() => {
 
   function lightboxNav(dir) {
     if (animating) return;
-    const list = sorted();
+    const list = activeList();
     if (!list.length) return;
     lightboxIndex = (lightboxIndex + dir + list.length) % list.length;
     showLightbox(false);
@@ -625,7 +694,7 @@ window.LefamiTimeline = (() => {
       photos = photos.filter(function (p) {
         return p.id !== photo.id;
       });
-      const list = sorted();
+      const list = activeList();
       if (els.lightbox && els.lightbox.open) {
         if (!list.length) {
           lbCloseSafe();
@@ -634,8 +703,11 @@ window.LefamiTimeline = (() => {
           showLightbox(false);
         }
       }
-      render();
-      renderHero();
+      if (pageMode === "manage") renderManage();
+      else {
+        render();
+        renderHero();
+      }
       if (onPhotosChanged) onPhotosChanged();
     } catch (err) {
       console.error(err);
@@ -649,7 +721,7 @@ window.LefamiTimeline = (() => {
   }
 
   function deleteCurrent() {
-    var list = sorted();
+    var list = activeList();
     if (list[lightboxIndex]) deletePhoto(list[lightboxIndex]);
   }
 
@@ -691,7 +763,7 @@ window.LefamiTimeline = (() => {
   }
 
   function downloadCurrent() {
-    var list = sorted();
+    var list = activeList();
     if (list[lightboxIndex]) downloadPhoto(list[lightboxIndex]);
   }
 
@@ -763,9 +835,9 @@ window.LefamiTimeline = (() => {
     setSort: setSort,
     setView: setView,
     setGrid: setGrid,
-    setMineOnly: setMineOnly,
-    isMineOnly: function () {
-      return mineOnly;
+    setPageMode: setPageMode,
+    getPageMode: function () {
+      return pageMode;
     },
     openLightbox: openLightbox,
     bindChrome: bindChrome,

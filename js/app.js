@@ -16,8 +16,8 @@
   function setHeaderSolid() {
     const header = document.querySelector(".site-header");
     if (!header) return;
-    // Hero mới ngắn hơn — sticky sớm
-    header.classList.toggle("is-solid", window.scrollY > 40);
+    const manageOn = document.body.classList.contains("page-manage-on");
+    header.classList.toggle("is-solid", manageOn || window.scrollY > 40);
   }
 
   function updateSubtitle() {
@@ -29,6 +29,22 @@
     } else {
       el.textContent = `Album của ${fam?.name || "gia đình"} — xem dạng lưới hoặc dòng thời gian.`;
     }
+  }
+
+  function goHome() {
+    LefamiTimeline.setPageMode("home");
+    setHeaderSolid();
+  }
+
+  function goManage() {
+    if (LefamiStorage.mode === "drive" && !LefamiStorage.isSignedIn()) {
+      show($("auth-gate"), true);
+      return;
+    }
+    LefamiTimeline.setPageMode("manage");
+    // Trang quản lý cần đủ ảnh của user → tải "all"
+    refreshPhotosForManage();
+    setHeaderSolid();
   }
 
   function renderUser() {
@@ -108,17 +124,27 @@
 
   async function refreshPhotos() {
     try {
-      const photos = await LefamiStorage.listPhotos(state.activeFamilyId, state.families);
+      const familyId =
+        LefamiTimeline.getPageMode() === "manage" ? "all" : state.activeFamilyId;
+      const photos = await LefamiStorage.listPhotos(familyId, state.families);
       LefamiTimeline.setPhotos(photos);
     } catch (err) {
       console.error(err);
       const msg = String(err && err.message ? err.message : err);
-      // Lỗi DOM thường do trình duyệt giữ file JS cũ — không làm phiền bằng alert kỹ thuật
       if (/innerHTML|null is not|Cannot set properties of null/i.test(msg)) {
         console.warn("Giao diện lệch phiên bản. Hãy Ctrl+F5 để tải lại.");
         return;
       }
       alert("Không tải được ảnh: " + msg);
+    }
+  }
+
+  async function refreshPhotosForManage() {
+    try {
+      const photos = await LefamiStorage.listPhotos("all", state.families);
+      LefamiTimeline.setPhotos(photos);
+    } catch (err) {
+      console.error(err);
     }
   }
 
@@ -151,6 +177,7 @@
   async function handleSignOut() {
     await LefamiStorage.signOut();
     if (LefamiStorage.mode === "drive") {
+      goHome();
       show($("auth-gate"), true);
       LefamiTimeline.setPhotos([]);
       renderUser();
@@ -215,19 +242,13 @@
     $("btn-signin-header")?.addEventListener("click", handleSignIn);
     $("btn-signout")?.addEventListener("click", handleSignOut);
     $("btn-upload")?.addEventListener("click", openUpload);
-    $("btn-my-photos")?.addEventListener("click", () => {
-      if (LefamiStorage.mode === "drive" && !LefamiStorage.isSignedIn()) {
-        show($("auth-gate"), true);
-        return;
+    $("btn-my-photos")?.addEventListener("click", goManage);
+    $("btn-back-home")?.addEventListener("click", goHome);
+    $("logo")?.addEventListener("click", (e) => {
+      if (LefamiTimeline.getPageMode() === "manage") {
+        e.preventDefault();
+        goHome();
       }
-      const next = !LefamiTimeline.isMineOnly();
-      LefamiTimeline.setMineOnly(next);
-      const fam = state.families.find((f) => f.id === state.activeFamilyId);
-      $("gallery-subtitle").textContent = next
-        ? "Ảnh bạn đã tải lên — có thể xóa nếu tải nhầm."
-        : state.activeFamilyId === "all"
-          ? "Tất cả ảnh của đại gia đình."
-          : `Album của ${fam?.name || "gia đình"} — xem dạng lưới hoặc dòng thời gian.`;
     });
 
     $("btn-scroll-gallery")?.addEventListener("click", () => {
